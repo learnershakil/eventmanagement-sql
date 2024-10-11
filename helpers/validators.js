@@ -3,7 +3,7 @@ import STATUSCODE from "./HttpStatusCodes.js";
 
 export const validateFields = (fields) => {
   for (const field of fields) {
-    if (!field.field || field.field.toString().trim() === "") {
+    if (!field.field.toString() || field.field.toString().trim() === "") {
       return {
         status: false,
         statuscode: STATUSCODE.NOT_ACCEPTABLE,

@@ -2,7 +2,6 @@ import sql from "mssql";
 import bcrypt from "bcrypt";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
 import { isValidPassword, validateFields } from "../helpers/validators.js";
-// import { createOtpFunc, verifyOtpFunc } from "./OtpController.js";
 import pool from "../config/sql.js";
 import {
   BAD_REQUEST,

@@ -1,11 +1,6 @@
-import sql from "mssql";
-import bcrypt from "bcrypt";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
 import { sendError, validateFields } from "./ErrorHandler.js";
-// import { createOtpFunc, verifyOtpFunc } from "./OtpController.js";
-import pool from "../config/sql.js";
-import JWT from "jsonwebtoken";
-import { JWT_SECRET, JWT_SECRET_EXPIRY } from "../ENV.js";
+import { JWT_SECRET } from "../ENV.js";
 import UserService from "../services/UserService.js";
 
 export const signup = async (req, res, next) => {
