@@ -1,6 +1,12 @@
-import { INTERNAL_SERVER_ERROR } from "../helpers/commonErrors.js";
+import sql from "mssql";
+import pool from "../config/sql.js";
+import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from "../helpers/commonErrors.js";
 import { validateFields } from "../helpers/validators.js";
 import bcrypt from "bcrypt";
+import { createMailOptions, sendMail } from "../controllers/MailController.js";
+import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import { generateOtpEmailHtml } from "../templates/emailHtmlTemplate.js";
+import { createToken } from "../helpers/jwt.js";
 
 const createOtpFunc = async (email, otpType) => {
   try {
@@ -12,24 +18,26 @@ const createOtpFunc = async (email, otpType) => {
 
     const recentOtp = await getOtpByEmail(email);
 
-    if (recentOtp) {
-      return {
-        status: false,
-        statusCode: STATUSCODE.TOO_MANY_REQUESTS,
-        message:
-          "You can only request an OTP once per minute. Please try again later.",
-      };
-    }
+    // if (recentOtp) {
+    //   return {
+    //     status: false,
+    //     statusCode: STATUSCODE.TOO_MANY_REQUESTS,
+    //     message:
+    //       "You can only request an OTP once per minute. Please try again later.",
+    //   };
+    // }
 
     const otp = Math.floor(1000 + Math.random() * 9000);
 
+    const hashedOtp = await bcrypt.hash(otp.toString(), 10);
+
     const result = await pool
       .request()
-      .input("otp", sql.VarChar, otp)
+      .input("otp", sql.VarChar, hashedOtp.toString())
       .input("email", sql.VarChar, email)
-      .input("type", sql.VarChar, otpType) // Assuming 'type' is a string
+      .input("otpType", sql.VarChar, otpType) // Assuming 'type' is a string
       .query(
-        "INSERT INTO Otps (otp, email, type) VALUES (@otp, @email, @type)"
+        "INSERT INTO Otps (otp, email, otpType) VALUES (@otp, @email, @otpType)"
       );
     if (result.rowsAffected[0] === 1) {
       //#region Sending Mail
@@ -45,11 +53,14 @@ const createOtpFunc = async (email, otpType) => {
       //#endregion
 
       // Assuming your otpModel schema has a method to create a JWT
-      const token = result.createJWT();
+      const otpData = await getOtpByEmail(email);
+
+      const token = createToken({ otpId: otpData.id });
+
       return {
         status: true,
         message: "OTP sent to email",
-        email: mailId,
+        email: email,
         token,
       };
     } else {
@@ -99,16 +110,17 @@ const getOtpById = async (otpId) => {
   }
 };
 
-export const verifyOtpFunc = async (otp, otpId) => {
+const verifyOtpFunc = async (otp, otpId) => {
   try {
     validateFields([
       { field: otp, message: "otp" },
       { field: otpId, message: "otp Id" },
     ]);
+
     const result = await getOtpById(otpId);
 
     if (!result) {
-      return { status: false, message: "Invalid OTP ID" };
+      return BAD_REQUEST("Invalid OTP ID");
     }
 
     const storedOtp = result.otp;
@@ -117,10 +129,10 @@ export const verifyOtpFunc = async (otp, otpId) => {
     const isMatch = await bcrypt.compare(otp, storedOtp);
 
     if (!isMatch) {
-      return { status: false, message: "Incorrect OTP" };
+      return BAD_REQUEST("Incorrect OTP");
     }
 
-    return { status: true, email: email };
+    return { status: true, statuscode: STATUSCODE.ACCEPTED, email: email };
   } catch (error) {
     console.error("Error verifying OTP:", error);
     throw new Error("Database error verifying OTP.");

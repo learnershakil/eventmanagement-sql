@@ -37,26 +37,13 @@ export const login = async (req, res, next) => {
 };
 
 export const verifyLoginOtp = async (req, res, next) => {
-  const { otp } = req.body;
+  const data = req.body;
   const { otpId } = req.user;
 
   try {
-    const { status, email } = await verifyOtpFunc(otp, otpId);
-    if (status) {
-      const user = await userModel.findOne({ email });
+    const result = await UserService.verifyLoginOtp({...data, otpId});
 
-      user.password = undefined;
-      const token = user.createJWT();
-
-      return res.status(STATUSCODE.OK).json({
-        status: true,
-        user,
-        token,
-      });
-    }
-    return res.status(STATUSCODE.OK).json({
-      status: false,
-    });
+    return res.status(result.statuscode).json(result);
   } catch (error) {
     next(error);
   }
