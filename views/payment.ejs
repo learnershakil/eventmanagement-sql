@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f4f4f4;
+      }
+      .container {
+        text-align: center;
+      }
+      button {
+        margin: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        color: white;
+        cursor: pointer;
+      }
+      #success-btn {
+        background-color: #4caf50;
+      }
+      #failed-btn {
+        background-color: #f44336;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Payment Details</h1>
+      <p id="payment-info"></p>
+
+      <button id="success-btn">Success</button>
+      <button id="failed-btn">Failed</button>
+    </div>
+
+    <script>
+      // Payment details embedded in the page
+      const amount = `<%= amount %>`;
+      const registrationId = `<%= registrationId %>`;
+      const payId = `<%= payId %>`;
+      // const url = "http://localhost:4000";
+      const url = "https://techsprint-lpu.vercel.app/";
+      // Display payment details
+      document.getElementById(
+        "payment-info"
+      ).innerText = `Payment Amount: ${amount}, Payment ID: ${payId}`;
+
+      // Handle button clicks
+      document
+        .getElementById("success-btn")
+        .addEventListener("click", async () => {
+          try {
+            const response = await fetch(url + "/api/payment/success", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ amount, paymentId: payId }),
+            });
+            const data = await response.json();
+            alert(data.message);
+          } catch (error) {
+            console.error("Error:", error);
+          }
+        });
+
+      document
+        .getElementById("failed-btn")
+        .addEventListener("click", async () => {
+          try {
+            const response = await fetch(url + "/api/payment/failed", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ amount, paymentId: payId }),
+            });
+            const data = await response.json();
+            alert(data.message);
+          } catch (error) {
+            console.error("Error:", error);
+          }
+        });
+    </script>
+  </body>
+</html>

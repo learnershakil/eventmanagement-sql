@@ -1,0 +1,22 @@
+{
+  "dataworkspace.excludedProjects": [
+    "TechSprint/TechSprint.sqlproj"
+  ],
+  "sqltools.connections": [
+    {
+      "mssqlOptions": {
+        "appName": "SQLTools",
+        "useUTC": true,
+        "encrypt": true
+      },
+      "previewLimit": 50,
+      "server": "localhost",
+      "port": 1433,
+      "driver": "MSSQL",
+      "name": "TechSprint",
+      "database": "master",
+      "username": "sa",
+      "password": "PassWord@10Strong"
+    }
+  ]
+}

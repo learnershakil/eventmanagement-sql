@@ -1,0 +1,60 @@
+[
+  {
+    "eventName": "Regard Before You Discard",
+    "eventType": "Social Service",
+    "description": "Participants will design and build a water rocket to achieve the highest altitude and maximum air time in the first round, and the greatest horizontal distance when launched at a 45-degree angle in the second round. Rockets must be constructed with safety in mind and adhere to the guidelines specified below.",
+    "photos": [
+      { "$oid": "66978b5c85a4c21cc1b2a35d" },
+      { "$oid": "66978b6185a4c21cc1b2a360" }
+    ],
+    "organiserName": "Lovely Professional University",
+    "location": {
+      "landmark": "Lovely Professional University (LPU)",
+      "city": "Phagwara",
+      "state": "Punjab",
+      "country": "India"
+    },
+    "day": { "$numberInt": "1" },
+    "shift": "Morning",
+    "structure": [
+      "It is single round event where the team with best utilization of waste will be declared as winner. The student will pitch their creation in front of the panel."
+    ],
+    "eligibilities": [
+      "<b>Participants:</b> Open to students from 8th to 12th grade.",
+      "<b>Team Composition:</b> Individuals or teams of up to four members.",
+      "<b>Mentor Requirement:</b> Each team must have at least one adult mentor or coach to guide the preparation and design of the rocket."
+    ],
+    "rules": [
+      "<b>1. Preparation and Launch:</b>",
+      "Teams must set up their rockets and launch pads in the designated area before the start of their allotted time.",
+      "When ready to launch, teams must raise a “Ready to Launch” flag. Notify the referee if needed.",
+      "Teams have 5 minutes to prepare and launch their rocket. Exceeding this time limit will result in disqualification.",
+      "<b>2. Penalties:</b>",
+      "Round 1: Rockets landing outside the defined area will incur a 5-second deduction from the recorded air time.",
+      "Round 2: Rockets landing outside the designated field area will be disqualified from the distance measurement.",
+      "<b>3. Safety and Compliance:</b>",
+      "Safety is paramount. Rockets and launch pads must be designed to ensure the safety of participants and spectators.",
+      "The use of commercial kits or pre-made components is prohibited.",
+      "All design elements must be inspected and approved by the launch inspector before the competition."
+    ],
+    "ruleBook": { "$oid": "66f0fdb1d38bc13b3a1b8982" },
+    "contacts": [
+      {
+        "name": "Muntaha Hassan",
+        "phone": "+91-9796005100",
+        "_id": { "$oid": "66978be085a4c21cc1b2a366" }
+      }
+    ],
+    "registrationCharge": {
+      "currency": "INR",
+      "amount": "100",
+      "isMandatory": true
+    },
+    "avengerCharacter": { "$oid": "6695b5789aa261802218c141" },
+    "eventDate": { "$date": { "$numberLong": "1723939200000" } },
+    "participants": {
+      "max": { "$numberInt": "4" },
+      "min": { "$numberInt": "2" }
+    }
+  }
+]
