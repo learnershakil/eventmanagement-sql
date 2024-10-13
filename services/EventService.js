@@ -1,8 +1,14 @@
 import sql from "mssql";
 import { getRequest } from "../config/sql.js";
-import { INTERNAL_SERVER_ERROR, OK } from "../helpers/commonErrors.js";
+import {
+  BAD_REQUEST,
+  INTERNAL_SERVER_ERROR,
+  NOT_FOUND,
+  OK,
+} from "../helpers/commonErrors.js";
 import FileServices from "./FileService.js";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import CommonQueries from "../commonQueries/findQueries.js";
 
 const createEvent = async (eventData) => {
   try {
@@ -180,12 +186,7 @@ const createEvent = async (eventData) => {
         FileServices.updateFileTill(avengerCharacter, "EventPhotos");
       }
 
-      return {
-        status: true,
-        statuscode: STATUSCODE.OK,
-        ...event,
-        message: "Event Created",
-      };
+      return OK("Event Created", event);
     } catch (error) {
       console.error("Error creating event (rolling back transaction):", error);
       return INTERNAL_SERVER_ERROR(
@@ -201,7 +202,7 @@ const createEvent = async (eventData) => {
   }
 };
 
-async function getAllEvents() {
+const getAllEvents = async () => {
   try {
     const request = await getRequest();
 
@@ -300,7 +301,114 @@ async function getAllEvents() {
     console.error("Error getting all events:", error.message);
     INTERNAL_SERVER_ERROR("Error getting all events:" + error.message);
   }
-}
+};
+
+const updateEvent = async (eventId, eventData) => {
+  try {
+    const result = await createEvent(eventData);
+    if (!result.status) return result;
+
+    CommonQueries.findAndDeleteById({
+      id: eventId,
+      tableName: "events",
+      userId: eventData.uplodedBy,
+    });
+
+    return { ...result, message: "Update Event Successfull" };
+  } catch (error) {
+    console.error("Update event Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR("Update event Failed: " + error.message);
+  }
+};
+
+const deleteEvent = async (eventId) => {
+  try {
+    const result = await CommonQueries.findAndDeleteById({
+      id: eventId,
+      tableName: "events",
+    });
+
+    return result;
+  } catch (error) {
+    console.error("Update event Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR("Update event Failed: " + error.message);
+  }
+};
+
+const updateAccommodationPrice = async (price) => {
+  try {
+    const result = await CommonQueries.findAll({ tableName: "accommodations" });
+    if (result.status) {
+      const prevPriceId = result.data[0].id || result.data[0].Id;
+      CommonQueries.findAndDeleteById({
+        id: prevPriceId,
+        tableName: "accommodation",
+      });
+    }
+
+    const request = await getRequest();
+    const query = `
+      INSERT INTO accommodations (price) 
+      OUTPUT INSERTED.* 
+      VALUES (@price);
+    `;
+
+    request.input("price", sql.Decimal, price);
+    const insertResult = await request.query(query);
+
+    return OK("Price Created / Updated", insertResult.recordset[0]);
+  } catch (error) {
+    console.error("Update event Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR("Update event Failed: " + error.message);
+  }
+};
+
+const getAccommodationPrice = async () => {
+  try {
+    const result = await CommonQueries.findAll({ tableName: "accommodations" });
+    if (!result.status) {
+      return NOT_FOUND("Accomodation Price Not Found");
+    }
+
+    const price = result.data[0].price;
+    return OK("Accomodation Price", price);
+  } catch (error) {
+    console.error("Accomodation Price fetch Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR(
+      "Accomodation Price fetch Failed: " + error.message
+    );
+  }
+};
+
+const deleteBrochure = async (eventId) => {
+  try {
+    const brochureRequest = await getRequest();
+    const brochureQuery = `SELECT * FROM Files WHERE [used] = @used`;
+    brochureRequest.input("used", sql.VarChar(255), "Brochure");
+    const brochureResult = await brochureRequest.query(brochureQuery);
+
+    const brochures = brochureResult.recordset;
+    brochures.map((brochure) => {
+      if (brochure.id) {
+        CommonQueries.findAndDeleteById({
+          id: brochure.id,
+          tableName: "files",
+        });
+      }
+      if (brochure.Id) {
+        CommonQueries.findAndDeleteById({
+          id: brochure.Id,
+          tableName: "files",
+        });
+      }
+    });
+
+    return OK("Brocher deleted", result);
+  } catch (error) {
+    console.error("Update event Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR("Update event Failed: " + error.message);
+  }
+};
 
 // Example usage:
 async function test() {
@@ -314,6 +422,14 @@ async function test() {
 
 // test();
 
-const EventServices = { createEvent, getAllEvents };
+const EventServices = {
+  createEvent,
+  getAllEvents,
+  updateEvent,
+  deleteEvent,
+  getAccommodationPrice,
+  updateAccommodationPrice,
+  deleteBrochure,
+};
 
 export default EventServices;
