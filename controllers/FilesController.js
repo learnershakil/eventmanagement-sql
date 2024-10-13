@@ -74,3 +74,39 @@ export const viewFile = async (req, res, next) => {
     next(err);
   }
 };
+
+export const deleteFile = async (req, res, next) => {
+  const fileId = Number(req.params.id);
+  if (typeof fileId !== "number" || isNaN(fileId)) {
+    const result = BAD_REQUEST("Invalid File Id");
+    return res.status(result.statuscode).json(result);
+  }
+
+  try {
+    const fileId = req.params.id;
+
+    const result = await FileServices.deleteFileById(fileId);
+
+    return res.status(result.statuscode).json(result);
+  } catch (err) {
+    return sendError(
+      STATUSCODE.INTERNAL_SERVER_ERROR,
+      "File Not Deleted\n" + err,
+      next
+    );
+  }
+};
+
+export const deleteTempFiles = async (req, res, next) => {
+  try {
+    const result = await FileServices.deleteTempFiles();
+
+    return res.status(result.statuscode).json(result);
+  } catch (err) {
+    return sendError(
+      STATUSCODE.INTERNAL_SERVER_ERROR,
+      "Templary file deletion failed\n" + err,
+      next
+    );
+  }
+};

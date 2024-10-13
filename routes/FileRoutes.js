@@ -1,8 +1,8 @@
 import express from "express";
 import {
   // changeFile,
-  // deleteFile,
-  // deleteTempFiles,
+  deleteFile,
+  deleteTempFiles,
   // downloadFile,
   uploadFile,
   viewFile,
@@ -17,7 +17,7 @@ router.post("/upload", userAuth, fileHandler, uploadFile);
 // router.post("/change/:fileId", userAuth, changeFile);
 // router.get("/download/:id", downloadFile);
 router.get("/view/:id", viewFile);
-// router.delete("/:id", userAuth, deleteFile);
-// router.delete("/deleteTempFiles", deleteTempFiles);
+router.delete("/deleteTempFiles", deleteTempFiles);
+router.delete("/:id", userAuth, deleteFile);
 
 export default router;

@@ -33,6 +33,7 @@ import etagMiddleware from "./config/crypto.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+global.__dirname = __dirname;
 
 const app = express();
 // app.use(

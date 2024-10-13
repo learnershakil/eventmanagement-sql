@@ -1,4 +1,6 @@
 import sql from "mssql";
+import fs from "fs";
+import path from "path";
 import { getRequest } from "../config/sql.js";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
 import { validateFields } from "../helpers/validators.js";
@@ -7,8 +9,9 @@ import {
   INTERNAL_SERVER_ERROR,
   NOT_FOUND,
 } from "../helpers/commonErrors.js";
-import { findOneById } from "../commonQueries/findQueries.js";
+import CommonQueries, { findOneById } from "../commonQueries/findQueries.js";
 import TABLES from "../Enums/dbTables.js";
+import redisClient from "../config/redis.js";
 
 const uploadFileData = async (data) => {
   try {
@@ -55,7 +58,8 @@ const findFileById = async (id) => {
   try {
     const result = await findOneById({ id: id, tableName: TABLES.FILES });
 
-    if (!result || result === null) return NOT_FOUND("File not found");
+    if (!result || result === null || result.isDeleted)
+      return NOT_FOUND("File not found");
     if (!result.statuscode) return result;
 
     return result;
@@ -64,6 +68,88 @@ const findFileById = async (id) => {
   }
 };
 
-const FileServices = { uploadFileData, findFileById };
+const deleteFileById = async (fileId) => {
+  const id = Number(fileId);
+  if (typeof id !== "number" || isNaN(id)) {
+    return BAD_REQUEST("Invalid user ID.  ID must be a number.");
+  }
+  try {
+    // deleteTempFiles();
+
+    const result = await CommonQueries.findAndDeleteById({
+      id,
+      tableName: "files",
+    });
+    if (!result.status) return result;
+
+    const file = result.data;
+    const filePath = path.join(__dirname, file.file);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    } else {
+      console.warn(`File not found for deletion: ${filePath}`);
+    }
+
+    if (file.used === "Gallery") redisClient.del("Gallery:Gallery");
+    if (file.used === "AboutUs") redisClient.del("AboutUs:AboutUs");
+
+    redisClient.del("file:" + id);
+
+    return {
+      status: true,
+      statuscode: STATUSCODE.OK,
+      file,
+      message: "File Deleted",
+    };
+  } catch (err) {
+    return INTERNAL_SERVER_ERROR("File Deleted failed\n" + err);
+  }
+};
+
+export const deleteTempFiles = async () => {
+  try {
+    const request = await getRequest();
+
+    const getFilesQuery = `SELECT id, * FROM Files WHERE till = 0`;
+    const result = await request.query(getFilesQuery);
+    const files = result.recordset;
+
+    for (const file of files) {
+      const id = file.id;
+      const filePath = path.join(__dirname, file.file);
+
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        } else {
+          console.warn(`File not found for deletion: ${filePath}`);
+        }
+        CommonQueries.findAndDeleteById(id);
+      } catch (error) {
+        console.error(`Error deleting file ${filePath}:`, error);
+      }
+
+      redisClient.del("file:" + JSON.stringify(id));
+    }
+
+    return {
+      status: true,
+      statuscode: STATUSCODE.NO_CONTENT,
+      message: "Temporary files deleted successfully.",
+    };
+  } catch (error) {
+    console.error("Error in deleteTempFiles:", error);
+    return INTERNAL_SERVER_ERROR(
+      "Database or file system error: " + error.message
+    );
+  }
+};
+
+const FileServices = {
+  uploadFileData,
+  findFileById,
+  deleteFileById,
+  deleteTempFiles,
+};
 
 export default FileServices;
