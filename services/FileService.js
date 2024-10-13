@@ -8,6 +8,7 @@ import {
   BAD_REQUEST,
   INTERNAL_SERVER_ERROR,
   NOT_FOUND,
+  OK,
 } from "../helpers/commonErrors.js";
 import CommonQueries, { findOneById } from "../commonQueries/findQueries.js";
 import TABLES from "../Enums/dbTables.js";
@@ -124,7 +125,7 @@ export const deleteTempFiles = async () => {
         } else {
           console.warn(`File not found for deletion: ${filePath}`);
         }
-        CommonQueries.findAndDeleteById(id);
+        CommonQueries.findAndDeleteById({ id, tableName: "files" });
       } catch (error) {
         console.error(`Error deleting file ${filePath}:`, error);
       }
@@ -145,11 +146,40 @@ export const deleteTempFiles = async () => {
   }
 };
 
+const updateFileTill = async (ids, used = "", till = "Permanent") => {
+  try {
+    const request = await getRequest();
+    const files = Array.isArray(ids) ? ids : [ids];
+
+    for (const id of files) {
+      const updateQuery = `
+        UPDATE Files 
+        SET till = @till${used ? ", used = @used" : ""} 
+        WHERE id = @id
+      `;
+
+      request.input("till", sql.VarChar, till);
+      request.input("id", sql.Int, id); // Assuming 'id' is an integer
+      if (used) {
+        request.input("used", sql.VarChar, used);
+      }
+
+      request.query(updateQuery);
+      redisClient.del("file:" + JSON.stringify(id));
+    }
+    return OK("files updated succesfully");
+  } catch (error) {
+    console.error("Error updating file records:", error);
+    return INTERNAL_SERVER_ERROR("Error updating file records:", error);
+  }
+};
+
 const FileServices = {
   uploadFileData,
   findFileById,
   deleteFileById,
   deleteTempFiles,
+  updateFileTill,
 };
 
 export default FileServices;

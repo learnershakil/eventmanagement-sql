@@ -31,3 +31,11 @@ export const BAD_REQUEST = (error) => {
     message: error,
   };
 };
+
+export const OK = (message) => {
+  return {
+    status: ture,
+    statuscode: STATUSCODE.OK,
+    message: message,
+  };
+};
