@@ -43,16 +43,28 @@ const pool = await connectToDatabase();
 
 const getRequest = async () => {
   try {
-    await pool.connect(); 
-    return pool.request(); // Return a request object
+    await pool.connect();
+    return pool.request();
   } catch (err) {
     console.error("Database connection failed:", err);
-    throw err; // Re-throw the error to be handled by the calling function
+    throw err;
   }
 };
 
+const getRequestConnection = async () => {
+  try {
+    const poolConnection = await pool.connect();
+    const transactionRequest = new sql.Request(poolConnection);
+    return { request: transactionRequest, connection: poolConnection };
+  } catch (err) {
+    console.error("Error getting request object:", err);
+    throw err;
+  }
+};
+
+
 process.on("exit", () => {
-  pool.close(); // Close the pool on application exit
+  pool.close();
 });
 
-export { getRequest };
+export { getRequest, getRequestConnection };

@@ -27,24 +27,32 @@ const uploadFileData = async (data) => {
     ]);
     if (!validationResult.status) return validationResult;
 
+    let fileTill = 0;
+
+    if (used === "Brocher") fileTill = 1;
+
     const request = await getRequest();
 
     const query = `
       INSERT INTO files (type, [file], till, used, uplodedBy)
+      OUTPUT INSERTED.*
       VALUES (@type, @file, @till, @used, @uplodedBy);
     `;
 
     request.input("type", sql.VarChar, type);
     request.input("file", sql.VarChar, file);
-    request.input("till", sql.Bit, till);
+    request.input("till", sql.Bit, fileTill);
     request.input("used", sql.VarChar, used);
     request.input("uplodedBy", sql.Int, uplodedBy);
 
-    await request.query(query);
+    const result = await request.query(query);
+    const fileData = result.recordset[0];
 
     return {
       status: true,
       statuscode: STATUSCODE.CREATED,
+      file: fileData,
+      fileId: fileData.id || fileData.Id,
       message: "File Data saved",
     };
   } catch (error) {
@@ -148,25 +156,27 @@ export const deleteTempFiles = async () => {
 
 const updateFileTill = async (ids, used = "", till = "Permanent") => {
   try {
-    const request = await getRequest();
-    const files = Array.isArray(ids) ? ids : [ids];
+    async () => {
+      const request = await getRequest();
+      const files = Array.isArray(ids) ? ids : [ids];
 
-    for (const id of files) {
-      const updateQuery = `
+      for (const id of files) {
+        const updateQuery = `
         UPDATE Files 
         SET till = @till${used ? ", used = @used" : ""} 
         WHERE id = @id
       `;
 
-      request.input("till", sql.VarChar, till);
-      request.input("id", sql.Int, id); // Assuming 'id' is an integer
-      if (used) {
-        request.input("used", sql.VarChar, used);
-      }
+        request.input("till", sql.VarChar, till);
+        request.input("id", sql.Int, id); // Assuming 'id' is an integer
+        if (used) {
+          request.input("used", sql.VarChar, used);
+        }
 
-      request.query(updateQuery);
-      redisClient.del("file:" + JSON.stringify(id));
-    }
+        request.query(updateQuery);
+        redisClient.del("file:" + JSON.stringify(id));
+      }
+    };
     return OK("files updated succesfully");
   } catch (error) {
     console.error("Error updating file records:", error);

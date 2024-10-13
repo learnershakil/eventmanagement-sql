@@ -1,6 +1,6 @@
 import express from "express";
 import UserRoutes from "./UserRoutes.js";
-// import EventRoutes from "./EventRoutes.js";
+import EventRoutes from "./EventRoutes.js";
 import FileRoutes from "./FileRoutes.js";
 // import MailRoutes from "./MailRoutes.js";
 // import OtpRoutes from "./OtpRoutes.js";
@@ -17,7 +17,7 @@ const router = express.Router();
 
 router.use("/user", UserRoutes);
 router.use("/file", FileRoutes);
-// router.use("/event", EventRoutes);
+router.use("/event", EventRoutes);
 // router.use("/mail", MailRoutes);
 // router.use("/otp", OtpRoutes);
 // router.use("/registration", RegistrationRoutes);

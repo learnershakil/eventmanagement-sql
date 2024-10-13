@@ -32,10 +32,11 @@ export const BAD_REQUEST = (error) => {
   };
 };
 
-export const OK = (message) => {
+export const OK = (message, data) => {
   return {
-    status: ture,
+    status: true,
     statuscode: STATUSCODE.OK,
     message: message,
+    data
   };
 };
