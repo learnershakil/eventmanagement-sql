@@ -41,4 +41,18 @@ const connectToDatabase = async () => {
 // Call the function to connect
 const pool = await connectToDatabase();
 
-export default pool;
+const getRequest = async () => {
+  try {
+    await pool.connect(); 
+    return pool.request(); // Return a request object
+  } catch (err) {
+    console.error("Database connection failed:", err);
+    throw err; // Re-throw the error to be handled by the calling function
+  }
+};
+
+process.on("exit", () => {
+  pool.close(); // Close the pool on application exit
+});
+
+export { getRequest };

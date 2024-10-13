@@ -5,7 +5,7 @@ import {
   // deleteTempFiles,
   // downloadFile,
   uploadFile,
-  // viewFile,
+  viewFile,
 } from "../controllers/FilesController.js";
 import userAuth from "../middlewares/authMiddleware.js";
 import fileHandler from "../config/multer.js";
@@ -16,7 +16,7 @@ const router = express.Router();
 router.post("/upload", userAuth, fileHandler, uploadFile);
 // router.post("/change/:fileId", userAuth, changeFile);
 // router.get("/download/:id", downloadFile);
-// router.get("/view/:id", viewFile);
+router.get("/view/:id", viewFile);
 // router.delete("/:id", userAuth, deleteFile);
 // router.delete("/deleteTempFiles", deleteTempFiles);
 

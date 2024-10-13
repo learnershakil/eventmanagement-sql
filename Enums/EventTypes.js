@@ -8,6 +8,3 @@ const EVENTTYPES = Object.freeze({
 });
 
 export default EVENTTYPES;
-
-const event = EVENTTYPES["CONFERENCE"];
-console.log(event);

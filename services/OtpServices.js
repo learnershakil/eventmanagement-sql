@@ -1,5 +1,5 @@
 import sql from "mssql";
-import pool from "../config/sql.js";
+import { getRequest } from "../config/sql.js";
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from "../helpers/commonErrors.js";
 import { validateFields } from "../helpers/validators.js";
 import bcrypt from "bcrypt";
@@ -18,30 +18,30 @@ const createOtpFunc = async (email, otpType) => {
 
     const recentOtp = await getOtpByEmail(email);
 
-    // if (recentOtp) {
-    //   return {
-    //     status: false,
-    //     statusCode: STATUSCODE.TOO_MANY_REQUESTS,
-    //     message:
-    //       "You can only request an OTP once per minute. Please try again later.",
-    //   };
-    // }
+    if (recentOtp) {
+      return {
+        status: false,
+        statusCode: STATUSCODE.TOO_MANY_REQUESTS,
+        message:
+          "You can only request an OTP once per minute. Please try again later.",
+      };
+    }
 
     const otp = Math.floor(1000 + Math.random() * 9000);
-
     const hashedOtp = await bcrypt.hash(otp.toString(), 10);
 
-    const result = await pool
-      .request()
-      .input("otp", sql.VarChar, hashedOtp.toString())
-      .input("email", sql.VarChar, email)
-      .input("otpType", sql.VarChar, otpType) // Assuming 'type' is a string
-      .query(
-        "INSERT INTO Otps (otp, email, otpType) VALUES (@otp, @email, @otpType)"
-      );
-    if (result.rowsAffected[0] === 1) {
-      //#region Sending Mail
+    const request = await getRequest();
+    const query = `
+      INSERT INTO Otps (otp, email, otpType) VALUES (@otp, @email, @otpType);
+    `;
 
+    request.input("otp", sql.VarChar, hashedOtp.toString());
+    request.input("email", sql.VarChar, email);
+    request.input("otpType", sql.VarChar, otpType);
+    const result = await request.query(query);
+
+    //#region Sending Mail
+    if (result.rowsAffected[0] === 1) {
       const mailOptions = createMailOptions({
         to: email,
         subject: "OTP for " + otpType,
@@ -49,8 +49,6 @@ const createOtpFunc = async (email, otpType) => {
       });
 
       await sendMail(mailOptions);
-
-      //#endregion
 
       // Assuming your otpModel schema has a method to create a JWT
       const otpData = await getOtpByEmail(email);
@@ -69,6 +67,7 @@ const createOtpFunc = async (email, otpType) => {
         message: "Failed to create OTP",
       };
     }
+    //#endregion
   } catch (error) {
     return INTERNAL_SERVER_ERROR("Failed to create OTP" + error);
   }
@@ -76,12 +75,15 @@ const createOtpFunc = async (email, otpType) => {
 
 const getOtpByEmail = async (email) => {
   try {
-    const result = await pool
-      .request()
-      .input("email", sql.VarChar, email)
-      .query(
-        "SELECT * FROM Otps WHERE email = @email AND createdAt >= DATEADD(minute, -1, GETUTCDATE())"
-      );
+    const request = await getRequest();
+    const query = `
+      SELECT * FROM Otps WHERE email = @email AND createdAt >= DATEADD(minute, -1, GETUTCDATE());
+    `;
+
+    request.input("email", sql.VarChar, email); // Use hashedOtp directly
+
+    const result = await request.query(query); // Await the query
+
     if (result.recordset && result.recordset.length > 0) {
       return result.recordset[result.recordset.length - 1];
     } else {
@@ -95,10 +97,15 @@ const getOtpByEmail = async (email) => {
 
 const getOtpById = async (otpId) => {
   try {
-    const result = await pool
-      .request()
-      .input("otpId", sql.Int, otpId) // Assuming otpId is an integer
-      .query("SELECT otp, email FROM Otps WHERE id = @otpId");
+    const request = await getRequest();
+    const query = `
+      SELECT otp, email FROM Otps WHERE id = @otpId;
+    `;
+
+    request.input("otpId", sql.Int, otpId);
+
+    const result = await request.query(query);
+
     if (result.recordset && result.recordset.length > 0) {
       return result.recordset[0];
     } else {

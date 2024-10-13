@@ -1,5 +1,8 @@
 import FileServices from "../services/FileService.js";
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from "../helpers/commonErrors.js";
+import { sendError } from "./ErrorHandler.js";
+import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import redisClient from "../config/redis.js";
 
 export const uploadFile = async (req, res) => {
   const { userId } = req.user;
@@ -27,9 +30,9 @@ export const uploadFile = async (req, res) => {
   }
 };
 
-export const viewFile = async (req, res) => {
-  const fileId = req.params.id;
-  if (!isNaN(fileId)) {
+export const viewFile = async (req, res, next) => {
+  const fileId = Number(req.params.id);
+  if (typeof fileId !== "number" || isNaN(fileId)) {
     const result = BAD_REQUEST("Invalid File Id");
     return res.status(result.statuscode).json(result);
   }
@@ -53,19 +56,18 @@ export const viewFile = async (req, res) => {
         return res.redirect(file.file);
       } else {
         // If data is not in cache, fetch it from the database
-        const file = await File.findById(fileId);
+        const result = await FileServices.findFileById(fileId);
         // Store data in cache for future use
-        if (!file || file === null || file === undefined || !file.file)
-          return sendError(STATUSCODE.NOT_FOUND, "File not found", next);
+        if (!result || result === null || result === undefined || !result.file)
+          return res.status(result.statuscode).json(result);
 
-        redisClient.set("file:" + fileId, JSON.stringify(file));
+        redisClient.set("file:" + fileId, JSON.stringify(result));
 
-        if (file.type.startsWith("image/")) {
-          return res.redirect(file.file);
+        if (result.file.startsWith("uploads/")) {
+          return res.redirect(`/${result.file}`);
         }
 
-        // Redirect to the file path
-        res.redirect(`/${file.file}`);
+        res.redirect(result.file);
       }
     });
   } catch (err) {

@@ -2,7 +2,7 @@ import sql from "mssql";
 import bcrypt from "bcrypt";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
 import { isValidPassword, validateFields } from "../helpers/validators.js";
-import pool from "../config/sql.js";
+import { getRequest } from "../config/sql.js";
 import {
   BAD_REQUEST,
   CONFLICT,
@@ -14,10 +14,14 @@ import { createToken } from "../helpers/jwt.js";
 
 const getUserByEmail = async (email) => {
   try {
-    const result = await pool
-      .request()
-      .input("email", sql.VarChar, email)
-      .query("SELECT * FROM Users WHERE email = @email");
+    const request = await getRequest();
+    const query = `
+      SELECT * FROM Users WHERE email = @email
+    `;
+
+    request.input("email", sql.VarChar, email);
+
+    const result = await request.query(query);
 
     if (result.recordset && result.recordset.length > 0) {
       return result.recordset[0];
@@ -32,14 +36,18 @@ const getUserByEmail = async (email) => {
 
 const getUserById = async (userId) => {
   if (typeof userId !== "number" || isNaN(userId)) {
-    throw new Error("Invalid user ID.  ID must be a number.");
+    return BAD_REQUEST("Invalid user ID.  ID must be a number.");
   }
 
   try {
-    const result = await pool
-      .request()
-      .input("id", sql.Int, userId)
-      .query("SELECT * FROM Users WHERE id = @id");
+    const request = await getRequest();
+    const query = `
+      SELECT * FROM Users WHERE id = @id
+    `;
+
+    request.input("id", sql.Int, userId);
+
+    const result = await request.query(query);
 
     if (result.recordset && result.recordset.length > 0) {
       return result.recordset[0];
@@ -73,14 +81,16 @@ const signup = async (data) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await pool
-      .request()
-      .input("fullname", sql.VarChar, fullname)
-      .input("email", sql.VarChar, email)
-      .input("password", sql.VarChar, hashedPassword)
-      .query(
-        "INSERT INTO Users (fullname, email, password) VALUES (@fullname, @email, @password)"
-      );
+    const request = await getRequest();
+    const query = `
+      INSERT INTO Users (fullname, email, password) VALUES (@fullname, @email, @password)
+    `;
+
+    request.input("fullname", sql.VarChar, fullname);
+    request.input("email", sql.VarChar, email);
+    request.input("password", sql.VarChar, hashedPassword);
+
+    const result = await request.query(query);
 
     const newUserResult = await getUserByEmail(email);
 
