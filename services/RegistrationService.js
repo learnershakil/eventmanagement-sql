@@ -367,6 +367,7 @@ const RegistrationService = {
   newRegistration,
   filterRegistrations,
   CsvRegistration,
+  callbackRegistration,
 };
 
 export default RegistrationService;

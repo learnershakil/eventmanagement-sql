@@ -24,6 +24,14 @@ export const NOT_FOUND = (error) => {
   };
 };
 
+export const NO_CONTENT = (error) => {
+  return {
+    status: false,
+    statuscode: STATUSCODE.NO_CONTENT,
+    message: error,
+  };
+};
+
 export const BAD_REQUEST = (error) => {
   return {
     status: false,
@@ -37,6 +45,15 @@ export const OK = (message, data) => {
     status: true,
     statuscode: STATUSCODE.OK,
     message: message,
-    data
+    data,
+  };
+};
+
+export const CREATED = (message, data) => {
+  return {
+    status: true,
+    statuscode: STATUSCODE.CREATED,
+    message: message,
+    data,
   };
 };

@@ -4,7 +4,7 @@ import EventRoutes from "./EventRoutes.js";
 import FileRoutes from "./FileRoutes.js";
 import RegistrationRoutes from "./RegistrationRoutes.js";
 // import PatmentRoutes from "./PaymentRoutes.js";
-// import ContactUsRoutes from "./DataRoutes/ContactUsRoutes.js";
+import ContactUsRoutes from "./ContactUsRoutes.js";
 // import {
 //   aboutusRouter,
 //   galleryRouter,
@@ -17,7 +17,7 @@ router.use("/user", UserRoutes);
 router.use("/file", FileRoutes);
 router.use("/event", EventRoutes);
 router.use("/registration", RegistrationRoutes);
-// router.use("/contactUs", ContactUsRoutes);
+router.use("/contactUs", ContactUsRoutes);
 // router.use("/aboutUs", aboutusRouter);
 // router.use("/gallery", galleryRouter);
 // router.use("/socialMedia", socialMediaRouter);

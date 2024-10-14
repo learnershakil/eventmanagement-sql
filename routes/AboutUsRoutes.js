@@ -5,7 +5,7 @@ import {
   mediaController,
   socialMediaController,
 } from "../../controllers/DataControllers/AboutUsController.js";
-import userAuth from "../../middlewares/authMiddleware.js";
+import userAuth from "../middlewares/authMiddleware.js";
 
 const aboutusRouter = express.Router();
 const socialMediaRouter = express.Router();

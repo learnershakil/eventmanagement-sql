@@ -45,3 +45,18 @@ export const downloadRegistrations = async (req, res, next) => {
   }
 };
 
+
+export const callbackRegistration = async (req, res, next) => {
+  const data = req.body;
+  try {
+    const result = await RegistrationService.callbackRegistration(data);
+
+    if (result.status === false)
+      return res.status(result.statuscode).json(result);
+
+    res.status(result.statuscode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
