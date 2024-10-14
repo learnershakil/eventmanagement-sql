@@ -233,8 +233,9 @@ const getAllEvents = async () => {
       const brochureQuery = `SELECT * FROM Files WHERE [used] = @used`;
       brochureRequest.input("used", sql.VarChar(255), "Brochure");
       const brochureResult = await brochureRequest.query(brochureQuery);
-      brochure =
-        brochureResult.recordset[0].id || brochureResult.recordset[0].Id;
+      if (brochureResult.recordset && brochureResult.recordset.length > 0)
+        brochure =
+          brochureResult.recordset[0].id || brochureResult.recordset[0].Id;
     }
 
     const events = {};
@@ -380,7 +381,7 @@ const getAccommodationPrice = async () => {
   }
 };
 
-const deleteBrochure = async (eventId) => {
+const deleteBrochure = async () => {
   try {
     const brochureRequest = await getRequest();
     const brochureQuery = `SELECT * FROM Files WHERE [used] = @used`;
@@ -388,25 +389,28 @@ const deleteBrochure = async (eventId) => {
     const brochureResult = await brochureRequest.query(brochureQuery);
 
     const brochures = brochureResult.recordset;
-    brochures.map((brochure) => {
+    for (const brochure of [brochures]) {
       if (brochure.id) {
-        CommonQueries.findAndDeleteById({
+        // Await the result of findAndDeleteById
+        await CommonQueries.findAndDeleteById({
           id: brochure.id,
           tableName: "files",
         });
       }
-      if (brochure.Id) {
-        CommonQueries.findAndDeleteById({
+      // Check if brochure.Id is necessary, it seems redundant with brochure.id
+      if (brochure.Id && brochure.Id !== brochure.id) {
+        // Avoid duplicate deletion if id and Id are the same
+        await CommonQueries.findAndDeleteById({
           id: brochure.Id,
           tableName: "files",
         });
       }
-    });
+    }
 
-    return OK("Brocher deleted", result);
+    return OK("Brocher deleted", brochures);
   } catch (error) {
-    console.error("Update event Failed: ", error.message);
-    return INTERNAL_SERVER_ERROR("Update event Failed: " + error.message);
+    console.error("Brocher deleted Failed: ", error.message);
+    return INTERNAL_SERVER_ERROR("Brocher deleted Failed: " + error.message);
   }
 };
 

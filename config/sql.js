@@ -67,4 +67,4 @@ process.on("exit", () => {
   pool.close();
 });
 
-export { getRequest, getRequestConnection };
+export { getRequest, getRequestConnection, config };

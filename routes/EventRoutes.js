@@ -6,7 +6,7 @@ import {
   // getEventById,
   accommodationPrice,
   updateAccommodationPrice,
-  // deleteBrochure,
+  deleteBrochure,
   updateEvent,
   // updateEventBulk,
 } from "../controllers/EventController.js";
@@ -25,7 +25,7 @@ router.post("/accommodationPrice", userAuth, updateAccommodationPrice);
 router.post("/create", userAuth, createEvent);
 router.post("/:id", userAuth, updateEvent);
 
-// router.delete("/brochure", userAuth, deleteBrochure);
+router.delete("/brochure", userAuth, deleteBrochure);
 router.delete("/:eventId", userAuth, deleteEvent);
 
 export default router;

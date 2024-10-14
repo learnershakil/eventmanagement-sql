@@ -22,6 +22,8 @@ export const uploadFile = async (req, res) => {
 
   try {
     const result = await FileServices.uploadFileData(fileData);
+    
+    if (fileData.used === "Brochure") redisClient.del("Event:Events");
 
     res.status(result.statuscode).json(result);
   } catch (error) {

@@ -16,7 +16,7 @@ export const createEvent = async (req, res, next) => {
 export const filterEvents = async (req, res, next) => {
   try {
     redisClient.get("Event:Events", async (err, result) => {
-      if (result) {
+      if (result && result.statuscode) {
         const redisEvents = JSON.parse(result);
         return res.status(redisEvents.statuscode || 200).json({
           status: redisEvents.status,
@@ -107,7 +107,10 @@ export const deleteEvent = async (req, res, next) => {
 export const deleteBrochure = async (req, res, next) => {
   try {
     const result = await EventServices.deleteBrochure();
-    return result;
+
+    redisClient.del("Event:Events");
+
+    return res.status(result.statuscode).json(result);
   } catch (error) {
     next(error);
   }
