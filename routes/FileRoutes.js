@@ -17,7 +17,7 @@ router.post("/upload", userAuth, fileHandler, uploadFile);
 // router.post("/change/:fileId", userAuth, changeFile);
 // router.get("/download/:id", downloadFile);
 router.get("/view/:id", viewFile);
-router.delete("/deleteTempFiles", deleteTempFiles);
+router.delete("/deleteTempFiles", userAuth, deleteTempFiles);
 router.delete("/:id", userAuth, deleteFile);
 
 export default router;

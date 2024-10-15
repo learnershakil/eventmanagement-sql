@@ -29,7 +29,9 @@ const uploadFileData = async (data) => {
 
     let fileTill = 0;
 
-    if (used === "Brocher") fileTill = 1;
+    if (used === "Brochure") {
+      fileTill = 1;
+    }
     if (used === "Gallery") {
       fileTill = 1;
       redisClient.del("Gallery:Gallery");

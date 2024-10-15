@@ -324,9 +324,27 @@ const updateEvent = async (eventId, eventData) => {
 
 const deleteEvent = async (eventId) => {
   try {
+    const res = await getAllEvents();
+    const data = res.data;
+
     const result = await CommonQueries.findAndDeleteById({
       id: eventId,
       tableName: "events",
+    });
+
+    data.forEach((event) => {
+      if (event._id == eventId) {
+        console.log(event);
+        const photos = event.photos;
+        const avengerCharacter = event.avengerCharacter;
+        const ruleBook = event.ruleBook;
+
+        photos.forEach((photo) => {
+          FileServices.deleteFileById(photo);
+        });
+        FileServices.deleteFileById(avengerCharacter);
+        FileServices.deleteFileById(ruleBook);
+      }
     });
 
     return result;
@@ -389,21 +407,11 @@ const deleteBrochure = async () => {
     const brochureResult = await brochureRequest.query(brochureQuery);
 
     const brochures = brochureResult.recordset;
-    for (const brochure of [brochures]) {
-      if (brochure.id) {
+    for (const brochure of brochures) {
+      let id = brochure.Id? brochure.Id : brochure.id;
+      if (id) {
         // Await the result of findAndDeleteById
-        await CommonQueries.findAndDeleteById({
-          id: brochure.id,
-          tableName: "files",
-        });
-      }
-      // Check if brochure.Id is necessary, it seems redundant with brochure.id
-      if (brochure.Id && brochure.Id !== brochure.id) {
-        // Avoid duplicate deletion if id and Id are the same
-        await CommonQueries.findAndDeleteById({
-          id: brochure.Id,
-          tableName: "files",
-        });
+        FileServices.deleteFileById(id);
       }
     }
 
