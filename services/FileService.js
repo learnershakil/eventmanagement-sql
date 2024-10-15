@@ -30,7 +30,10 @@ const uploadFileData = async (data) => {
     let fileTill = 0;
 
     if (used === "Brocher") fileTill = 1;
-    if (used === "Gallery") {fileTill = 1; redisClient.del("Gallery:Gallery");}
+    if (used === "Gallery") {
+      fileTill = 1;
+      redisClient.del("Gallery:Gallery");
+    }
 
     const request = await getRequest();
 

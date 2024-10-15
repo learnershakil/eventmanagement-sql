@@ -112,7 +112,7 @@ export const getAllGallery = async (req, res, next) => {
 
         if (photos.length === 0) {
           return sendError(
-            STATUSCODE.NOT_FOUND,
+            STATUSCODE.NO_CONTENT,
             "No Gallery Photos found",
             next
           );
