@@ -1,6 +1,5 @@
 import sql from "mssql";
 import { getRequest } from "../config/sql.js";
-import FileServices from "./FileService.js";
 import { validateFields } from "../helpers/validators.js";
 import { CREATED, NOT_FOUND, OK } from "../helpers/commonErrors.js";
 
