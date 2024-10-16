@@ -8,6 +8,7 @@ import { PORT } from "./ENV.js";
 import errorMiddelware from "./middlewares/errorMiddleware.js";
 import morgan from "morgan";
 import APIRoutes from "./routes/index.js";
+import RegRoute from "./routes/Reg.js";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -91,11 +92,14 @@ app.use(etagMiddleware);
 app.get("/", (req, res, next) => {
   return res.status(STATUSCODE.OK).send("<b>Event Manangment Backend</b>");
 });
+
 app.get("/api/auth", userAuth, (req, res) => {
   res.status(STATUSCODE.OK).send({ success: true, message: "Token is Valid" });
 });
 
 app.use("/api", APIRoutes);
+
+app.use("/reg", RegRoute);
 
 app.use("/videos", express.static(path.join(__dirname, "videos")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

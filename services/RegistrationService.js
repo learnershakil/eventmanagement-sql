@@ -1,4 +1,5 @@
 import sql from "mssql";
+import jwt from "jsonwebtoken";
 import { validateFields } from "../helpers/validators.js";
 import { config, getRequest } from "../config/sql.js";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
@@ -8,11 +9,37 @@ import {
   OK,
 } from "../helpers/commonErrors.js";
 import CommonQueries from "../commonQueries/findQueries.js";
+import { createMailOptions, sendMail } from "./MailService.js";
+import EventServices from "./EventService.js";
+import { newRegistrationButtonClick } from "../templates/registrationHtmltemplates.js";
+import { BaseUrl } from "../ENV.js";
 
 const newRegistration = async (data) => {
-  const { teamName, team, eventIds, amount } = data;
-
+  const { teamName, team, eventIds } = data;
   try {
+    let amount = 0;
+    const eventResult = await EventServices.getAllEvents();
+    const accommodationFeeResult = await EventServices.getAccommodationPrice();
+    const registeredEventsData = [];
+
+    for (const eventId of eventIds) {
+      const event = eventResult.data.find((e) => e._id === eventId);
+      if (event) {
+        amount += parseFloat(event.registrationCharge.amount || 0);
+        registeredEventsData.push(event);
+      }
+    }
+
+    // Calculate accommodation amount if members exist and have opted for accommodation
+    if (team && team.length > 0) {
+      const membersOptingAccommodation = team.filter(
+        (member) => member.optAccomodation
+      ).length;
+      const accommodationFee = parseFloat(accommodationFeeResult.data);
+      amount +=
+        membersOptingAccommodation *
+        (isNaN(accommodationFee) ? 0 : accommodationFee);
+    }
     const validationResult = validateFields([
       { field: teamName, message: "Team name is required" },
       { field: eventIds, message: "Event ID is required" },
@@ -26,12 +53,14 @@ const newRegistration = async (data) => {
     await transaction.begin();
 
     try {
+      const key = generateUniqueKey();
       const registrationResult = await transaction
         .request()
         .input("teamName", sql.VarChar, teamName)
+        .input("key", sql.VarChar, key)
         .input("amount", sql.Decimal, amount)
         .query(
-          "INSERT INTO Registrations (teamName, amount) OUTPUT INSERTED.id AS registrationId  VALUES (@teamName, @amount); SELECT SCOPE_IDENTITY() AS registrationId;"
+          "INSERT INTO Registrations (teamName, amount, [key]) OUTPUT INSERTED.*, INSERTED.id AS registrationId  VALUES (@teamName, @amount, @key); SELECT SCOPE_IDENTITY() AS registrationId;"
         );
 
       const registrationId = registrationResult.recordset[0].registrationId;
@@ -64,6 +93,14 @@ const newRegistration = async (data) => {
       await transaction.commit();
 
       // ... (Payment processing, email sending logic - adapt as needed)
+      sendRegistrationMail({
+        teamName,
+        team,
+        eventIds,
+        amount,
+        registeredEventsData,
+        key,
+      });
 
       return {
         status: true,
@@ -313,7 +350,7 @@ const CsvRegistration = async (data) => {
   }
 };
 
-export const callbackRegistration = async (data) => {
+const callbackRegistration = async (data) => {
   const { registrationId, paymentStatus, paymentId } = data;
 
   try {
@@ -353,7 +390,7 @@ export const callbackRegistration = async (data) => {
   }
 };
 
-export const deleteRegistration = async (Id) => {
+const deleteRegistration = async (Id) => {
   const id = Number(Id);
   if (typeof id !== "number" || isNaN(id)) {
     return BAD_REQUEST("Invalid user ID.  ID must be a number.");
@@ -373,6 +410,123 @@ export const deleteRegistration = async (Id) => {
   }
 };
 
+const getRegistrationByKey = async (key) => {
+  try {
+    const request = await getRequest();
+
+    const result = await request
+      .input("key", sql.VarChar, key)
+      .query("SELECT * FROM Registrations WHERE [key] = @key");
+
+    // Check if a registration was found
+    if (result.recordset.length > 0) {
+      return result.recordset[0];
+    } else {
+      throw new Error("No registration found for the provided key.");
+    }
+  } catch (error) {
+    console.error("Error retrieving registration:", error);
+    throw error; // Rethrow the error for further handling if needed
+  }
+};
+
+const generateUniqueKey = () => {
+  const timestamp = new Date().getTime().toString(36); // Convert timestamp to base36
+  const randomPart = Math.random().toString(36).substring(2, 15); // Generate random string
+  return `${timestamp}-${randomPart}`;
+};
+
+const sendRegistrationMail = async ({
+  teamName,
+  team,
+  eventIds,
+  amount,
+  registeredEventsData,
+  key,
+}) => {
+  const mailTo = team[0].email;
+  const subject = "Registration Successful for team " + teamName;
+  const text = `Dear ${teamName},\n\nYour registration has been successfully processed. Your payment status is currently pending.\n\nThank you for registering!`;
+
+  const paymentLink = BaseUrl + "/reg/" + key;
+
+  const html = newRegistrationButtonClick(
+    {
+      teamName,
+      team,
+      eventIds: registeredEventsData,
+      amount,
+    },
+    paymentLink
+  );
+
+  const mailOptions = createMailOptions({
+    to: mailTo,
+    subject: subject,
+    text: text,
+    html: html,
+  });
+
+  // Send email
+  const emailSent = await sendMail(mailOptions);
+
+  if (!emailSent) {
+    console.error("Failed to send registration email");
+  }
+};
+
+const generateRandomKey = () => {
+  let randomKey = "";
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const charactersLength = characters.length;
+  const length = 50;
+  const hashLength = 15;
+  let counter = 0;
+
+  for (let i = 0; i < 5; i = i + 1) {
+    counter = 0;
+    while (counter < length) {
+      randomKey += characters.charAt(
+        Math.floor(Math.random() * charactersLength)
+      );
+      counter += 1;
+    }
+
+    counter = 0;
+    while (counter < hashLength) {
+      randomKey += "/";
+      counter += 1;
+    }
+  }
+
+  counter = 0;
+  while (counter < length) {
+    randomKey += characters.charAt(
+      Math.floor(Math.random() * charactersLength)
+    );
+    counter += 1;
+  }
+
+  return randomKey;
+};
+
+const generateToken = async (publicKey) => {
+  // Define the payload
+  const payload = {
+    name: "v@lu3_1!",
+    type: "s0m3_d@t@",
+    org: "7h15_15_@n_3x@mpl3",
+    web: "m0r3_5p3c1@l_ch@r$!",
+    prod: "d0_n0t_u$3_th1$_1n_pr0duct10n",
+  };
+
+  const token = jwt.sign(payload, publicKey);
+
+  // console.log("Generated JWT:", token);
+  return token;
+};
+
 // Example implementation for team ID generation (adapt as needed)
 async function generateTeamId() {
   const request = await getRequest();
@@ -383,6 +537,9 @@ async function generateTeamId() {
 }
 
 const RegistrationService = {
+  generateRandomKey,
+  generateToken,
+  getRegistrationByKey,
   newRegistration,
   filterRegistrations,
   CsvRegistration,

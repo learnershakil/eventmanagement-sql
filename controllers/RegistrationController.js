@@ -1,5 +1,6 @@
 import { parse } from "json2csv";
 import RegistrationService from "../services/RegistrationService.js";
+import { token } from "morgan";
 
 export const newRegistration = async (req, res, next) => {
   const data = req.body;
@@ -64,6 +65,27 @@ export const callbackRegistration = async (req, res, next) => {
       return res.status(result.statuscode).json(result);
 
     res.status(result.statuscode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const payRegister = async (req, res, next) => {
+  try {
+    const { key } = req.params;
+    const result = await RegistrationService.getRegistrationByKey(key);
+    if (!result) res.status(404);
+
+    if (result.paymentStatus === "Completed") {
+      res.status(200).json({ message: "Payment is completed" });
+    }
+
+    const publicKey = await RegistrationService.generateRandomKey();
+    const token = await RegistrationService.generateToken(publicKey);
+
+    // send token with amount
+
+    res.status(200).json({ publicKey, token });
   } catch (error) {
     next(error);
   }
