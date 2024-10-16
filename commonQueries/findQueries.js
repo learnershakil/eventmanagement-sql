@@ -175,11 +175,11 @@ export const findAndSoftDeleteById = async ({ id, tableName, userId }) => {
             UPDATE ${tableName} 
             SET isDeleted = 1
             OUTPUT INSERTED.* 
-            WHERE id = @id AND isDeleted = 0;
+            WHERE id = @id;
         `;
 
     request.input("id", sql.Int, Id);
-    request.input("deletedBy", sql.Int, userId || null);
+    if (userId) request.input("deletedBy", sql.Int, userId || null);
 
     const result = await request.query(updateQuery);
 

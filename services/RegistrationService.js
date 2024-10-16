@@ -7,17 +7,19 @@ import {
   NOT_FOUND,
   OK,
 } from "../helpers/commonErrors.js";
+import CommonQueries from "../commonQueries/findQueries.js";
 
 const newRegistration = async (data) => {
   const { teamName, team, eventIds, amount } = data;
 
   try {
-    validateFields([
+    const validationResult = validateFields([
       { field: teamName, message: "Team name is required" },
       { field: eventIds, message: "Event ID is required" },
       { field: team, message: "Team Member details are required" },
       { field: amount, message: "Amount is required" },
     ]);
+    if (!validationResult.status) return validationResult;
 
     const pool = await sql.connect(config);
     const transaction = new sql.Transaction(pool);
@@ -128,7 +130,8 @@ const filterRegistrations = async (data) => {
       // Handle both true/false and empty string
       query += " AND r.isDeleted = @isDeleted";
       countQuery += " AND isDeleted = @isDeleted";
-      request.input("isDeleted", sql.Bit, isDeleted);
+      const deletedFilter = isDeleted === "true";
+      request.input("isDeleted", sql.Bit, deletedFilter);
     }
     const pageInt = parseInt(page, 10) || 1;
     const limitInt = parseInt(limit, 10) || 10;
@@ -190,6 +193,7 @@ const filterRegistrations = async (data) => {
         // Create new registration object
         acc.push({
           id: curr.id,
+          _id: curr.id,
           teamName: curr.teamName,
           teamId: curr.teamId,
           amount: curr.amount,
@@ -221,6 +225,7 @@ const filterRegistrations = async (data) => {
 
     registrations = registrations.map((reg) => ({
       registrationId: reg.id,
+      _id: reg.id,
       registrationDate: reg.createdAt,
       teamName: reg.teamName,
       teamId: reg.teamId,
@@ -348,6 +353,26 @@ export const callbackRegistration = async (data) => {
   }
 };
 
+export const deleteRegistration = async (Id) => {
+  const id = Number(Id);
+  if (typeof id !== "number" || isNaN(id)) {
+    return BAD_REQUEST("Invalid user ID.  ID must be a number.");
+  }
+  try {
+    await CommonQueries.findAndSoftDeleteById({
+      id,
+      tableName: "registrations",
+    });
+    return OK("Registration Deletd!", "");
+  } catch (error) {
+    console.error("Error deleting Registration Deletd:", error.message);
+    return INTERNAL_SERVER_ERROR(
+      "Error deleting Registration Deletd:",
+      error.message
+    );
+  }
+};
+
 // Example implementation for team ID generation (adapt as needed)
 async function generateTeamId() {
   const request = await getRequest();
@@ -357,16 +382,11 @@ async function generateTeamId() {
   return result.recordset[0][""] || 1; // Handle case where table is empty
 }
 
-callbackRegistration({
-  registrationId: 1,
-  paymentStatus: "Completed",
-  paymentId: 1,
-});
-
 const RegistrationService = {
   newRegistration,
   filterRegistrations,
   CsvRegistration,
+  deleteRegistration,
   callbackRegistration,
 };
 

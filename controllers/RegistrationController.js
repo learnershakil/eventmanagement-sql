@@ -21,6 +21,16 @@ export const filterRegistrations = async (req, res, next) => {
   }
 };
 
+export const deleteRegistration = async (req, res, next) => {
+  const id = req.params.id;
+  try {
+    const result = await RegistrationService.deleteRegistration(id);
+    res.status(result.statuscode).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const downloadRegistrations = async (req, res, next) => {
   const data = req.body;
   try {
@@ -45,7 +55,6 @@ export const downloadRegistrations = async (req, res, next) => {
   }
 };
 
-
 export const callbackRegistration = async (req, res, next) => {
   const data = req.body;
   try {
@@ -59,4 +68,3 @@ export const callbackRegistration = async (req, res, next) => {
     next(error);
   }
 };
-
