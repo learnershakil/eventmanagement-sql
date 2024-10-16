@@ -354,15 +354,25 @@ const deleteEvent = async (eventId) => {
   }
 };
 
-const updateAccommodationPrice = async (price) => {
+const updateAccommodationPrice = async (Price) => {
+  const price = Number(Price);
+  if (isNaN(price)) {
+    return BAD_REQUEST("Price should be number");
+  }
+
   try {
-    const result = await CommonQueries.findAll({ tableName: "accommodations" });
+    const result = await CommonQueries.findAll({
+      tableName: "accommodations",
+    });
     if (result.status) {
-      const prevPriceId = result.data[0].id || result.data[0].Id;
-      CommonQueries.findAndDeleteById({
-        id: prevPriceId,
-        tableName: "accommodation",
-      });
+      const data = result.data;
+      for (const d of data) {
+        const prevPriceId = d.id || d.Id;
+        CommonQueries.findAndDeleteById({
+          id: prevPriceId,
+          tableName: "accommodations",
+        });
+      }
     }
 
     const request = await getRequest();
@@ -389,7 +399,7 @@ const getAccommodationPrice = async () => {
       return NOT_FOUND("Accomodation Price Not Found");
     }
 
-    const price = result.data[0].price;
+    const price = result.data[result.data.length - 1].price;
     return OK("Accomodation Price", price);
   } catch (error) {
     console.error("Accomodation Price fetch Failed: ", error.message);
@@ -408,7 +418,7 @@ const deleteBrochure = async () => {
 
     const brochures = brochureResult.recordset;
     for (const brochure of brochures) {
-      let id = brochure.Id? brochure.Id : brochure.id;
+      let id = brochure.Id ? brochure.Id : brochure.id;
       if (id) {
         // Await the result of findAndDeleteById
         FileServices.deleteFileById(id);
