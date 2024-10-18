@@ -1,11 +1,14 @@
 import { parse } from "json2csv";
 import RegistrationService from "../services/RegistrationService.js";
-import { token } from "morgan";
+import CryptoJS from "crypto-js";
+import { BaseUrl, JWT_SECRET } from "../ENV.js";
 
 export const newRegistration = async (req, res, next) => {
   const data = req.body;
   try {
     const result = await RegistrationService.newRegistration(data);
+    if (!result.status) res.status(result.statuscode).json(result);
+
     res.status(result.statuscode).json(result);
   } catch (error) {
     next(error);
@@ -74,18 +77,40 @@ export const payRegister = async (req, res, next) => {
   try {
     const { key } = req.params;
     const result = await RegistrationService.getRegistrationByKey(key);
-    if (!result) res.status(404);
 
-    if (result.paymentStatus === "Completed") {
-      res.status(200).json({ message: "Payment is completed" });
+    if (!result) {
+      return res.status(404).json({ message: "Registration not found" });
     }
 
-    const publicKey = await RegistrationService.generateRandomKey();
+    if (result.paymentStatus === "Completed") {
+      return res.status(200).json({ message: "Payment is completed" });
+    }
+
+    // generateHash({
+    //   orderId: "1",
+    //   name: "Mokshit",
+    //   amount: "100.00",
+    //   type: "TechSprint",
+    //   email: "mokshitjain18@gmail.com",
+    //   mobile: "",
+    // });
+
+    const randomKey = RegistrationService.generateRandomKey();
+    const publicKey = await RegistrationService.getPublicKey(randomKey);
     const token = await RegistrationService.generateToken(publicKey);
 
-    // send token with amount
+    const paymentPayload = {
+      order: await RegistrationService.generateHash(result.id),
+      name: result.teamName,
+      amount: await RegistrationService.generateHash(result.amount),
+      type: "TechSprint",
+      email: result.email,
+      mobile: result.phone,
+      responceURL: BaseUrl + "/callback",
+    };
 
-    res.status(200).json({ publicKey, token });
+    // Send token with encrypted amount
+    res.status(200).json({ publicKey, token, paymentPayload });
   } catch (error) {
     next(error);
   }

@@ -12,7 +12,8 @@ import CommonQueries from "../commonQueries/findQueries.js";
 import { createMailOptions, sendMail } from "./MailService.js";
 import EventServices from "./EventService.js";
 import { newRegistrationButtonClick } from "../templates/registrationHtmltemplates.js";
-import { BaseUrl } from "../ENV.js";
+import { BaseUrl, CRYPTO_SECRET } from "../ENV.js";
+import crypto from "crypto";
 
 const newRegistration = async (data) => {
   const { teamName, team, eventIds } = data;
@@ -54,13 +55,20 @@ const newRegistration = async (data) => {
 
     try {
       const key = generateUniqueKey();
+      const email = team[0].email;
+      const phone = team[0].phoneNumber;
+
       const registrationResult = await transaction
         .request()
         .input("teamName", sql.VarChar, teamName)
         .input("key", sql.VarChar, key)
+        .input("email", sql.VarChar, email)
+        .input("phone", sql.VarChar, phone)
         .input("amount", sql.Decimal, amount)
         .query(
-          "INSERT INTO Registrations (teamName, amount, [key]) OUTPUT INSERTED.*, INSERTED.id AS registrationId  VALUES (@teamName, @amount, @key); SELECT SCOPE_IDENTITY() AS registrationId;"
+          `INSERT INTO Registrations (teamName, amount, [key], email, phone) 
+          OUTPUT INSERTED.*, INSERTED.id AS registrationId 
+          VALUES (@teamName, @amount, @key, @email, @phone); SELECT SCOPE_IDENTITY() AS registrationId;`
         );
 
       const registrationId = registrationResult.recordset[0].registrationId;
@@ -92,6 +100,8 @@ const newRegistration = async (data) => {
 
       await transaction.commit();
 
+      const paymentLink = BaseUrl + "/reg/" + key;
+
       // ... (Payment processing, email sending logic - adapt as needed)
       sendRegistrationMail({
         teamName,
@@ -99,7 +109,7 @@ const newRegistration = async (data) => {
         eventIds,
         amount,
         registeredEventsData,
-        key,
+        paymentLink,
       });
 
       return {
@@ -107,6 +117,7 @@ const newRegistration = async (data) => {
         statuscode: STATUSCODE.CREATED,
         message: "User Registration Processed\nPayment Status: Pending",
         registrationId: registrationId,
+        redirectUrl: paymentLink,
       };
     } catch (error) {
       await transaction.rollback();
@@ -442,13 +453,11 @@ const sendRegistrationMail = async ({
   eventIds,
   amount,
   registeredEventsData,
-  key,
+  paymentLink,
 }) => {
   const mailTo = team[0].email;
   const subject = "Registration Successful for team " + teamName;
   const text = `Dear ${teamName},\n\nYour registration has been successfully processed. Your payment status is currently pending.\n\nThank you for registering!`;
-
-  const paymentLink = BaseUrl + "/reg/" + key;
 
   const html = newRegistrationButtonClick(
     {
@@ -511,6 +520,12 @@ const generateRandomKey = () => {
   return randomKey;
 };
 
+const getPublicKey = async (randomKey) => {
+  if (!randomKey || !randomKey.trim()) return null;
+
+  return randomKey;
+};
+
 const generateToken = async (publicKey) => {
   // Define the payload
   const payload = {
@@ -526,6 +541,24 @@ const generateToken = async (publicKey) => {
   // console.log("Generated JWT:", token);
   return token;
 };
+
+const generateHash = async (data) => {
+  const string = data.toString();
+  const secretKey = CRYPTO_SECRET;
+
+  const hmac = crypto.createHmac("sha256", secretKey);
+  hmac.update(string);
+  const hash = hmac.digest("hex");
+
+  return hash;
+};
+
+
+// console.log(
+//   await generateToken(
+//     "f6BCgnCln54I4aYgk64NZbd2fY2LZQovTAWDvgTmRPHLwgkvvtgyRhje3Jwsu0vHRIYEnuVdnR5jEBF9NHpGJZOMqSKVUA10ua4XrQhbHcl9laKCdxPXLY714mnFU9tWZfZDGSR6Ao8HOPAqiiSwVeoFdc3fCMqISykflg5uQSxxZznpV7wMr7bV1tAEZLEX7AYpEvfcnxQcR1PNZOuEpOqVxzo1PAFeoJzyK8UA2uz3"
+//   )
+// );
 
 // Example implementation for team ID generation (adapt as needed)
 async function generateTeamId() {
@@ -545,6 +578,8 @@ const RegistrationService = {
   CsvRegistration,
   deleteRegistration,
   callbackRegistration,
+  getPublicKey,
+  generateHash,
 };
 
 export default RegistrationService;
