@@ -15,3 +15,4 @@ export const MSSQL_PORT = process.env.MSSQL_PORT;
 export const MSSQL_IP = process.env.MSSQL_IP;
 export const UploadsFolder = process.env.FILES_UPLOAD_FOLDER;
 export const BaseUrl = process.env.BASE_URL;
+export const FRONTEND_URL = process.env.FRONTEND_URL;

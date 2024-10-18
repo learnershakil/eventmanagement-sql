@@ -90,7 +90,9 @@ app.use(etagMiddleware);
 
 /// Api routes
 app.get("/", (req, res, next) => {
-  return res.status(STATUSCODE.OK).send("<b>Event Manangment Backend</b>");
+  const err = new Error("Page Not Found");
+  err.statusCode = 404;
+  next(err);
 });
 
 app.get("/api/auth", userAuth, (req, res) => {

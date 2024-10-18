@@ -60,14 +60,30 @@ export const downloadRegistrations = async (req, res, next) => {
 };
 
 export const callbackRegistration = async (req, res, next) => {
-  const data = req.body;
+  const data = req.query;
+  // "?id=" + ID + "&status=" + Status + "&type=" + Type + "&transactionNo=" +
+  // TxnID + "&hashedValue=" + hashedValue + "&Course=" + KeyNote + "&KeyNote=" + KeyNote
+
+  // status = SUCCESS, FAILURE, RECORD_NOT_FOUND
   try {
-    const result = await RegistrationService.callbackRegistration(data);
+    const registrationId = RegistrationService.decrypt(data.ID);
+    const paymentStatus =
+      RegistrationService.decrypt(data.status) === "SUCCESS"
+        ? "Completed"
+        : "Failed";
+    const paymentId = RegistrationService.decrypt(data.transactionNo);
+
+    // registrationId, paymentStatus, paymentId
+    const result = await RegistrationService.callbackRegistration({
+      registrationId,
+      paymentStatus,
+      paymentId,
+    });
 
     if (result.status === false)
-      return res.status(result.statuscode).json(result);
+      return res.status(result.statuscode).send(true);
 
-    res.status(result.statuscode).json(result);
+    res.status(result.statuscode).send(true);
   } catch (error) {
     next(error);
   }
@@ -79,11 +95,15 @@ export const payRegister = async (req, res, next) => {
     const result = await RegistrationService.getRegistrationByKey(key);
 
     if (!result) {
-      return res.status(404).json({ message: "Registration not found" });
+      const err = new Error("Page Not Found");
+      err.statusCode = 404;
+      return next(err);
     }
 
     if (result.paymentStatus === "Completed") {
-      return res.status(200).json({ message: "Payment is completed" });
+      const paymentDetailsHtml = paymentCompletedHtml(result);
+
+      return res.status(200).send(paymentDetailsHtml);
     }
 
     // generateHash({
@@ -100,13 +120,15 @@ export const payRegister = async (req, res, next) => {
     const token = await RegistrationService.generateToken(publicKey);
 
     const paymentPayload = {
-      order: await RegistrationService.generateHash(result.id),
+      order: RegistrationService.generateHash(result.id),
+      // order: result.id.toString(),
       name: result.teamName,
-      amount: await RegistrationService.generateHash(result.amount),
-      type: "TechSprint",
+      amount: RegistrationService.generateHash(result.amount),
+      // amount: result.amount.toString(),
+      type: "TechSprint 2024",
       email: result.email,
       mobile: result.phone,
-      responceURL: BaseUrl + "/callback",
+      responseURL: BaseUrl + "/callback",
     };
 
     // Send token with encrypted amount
@@ -114,4 +136,51 @@ export const payRegister = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+const paymentCompletedHtml = (result) => {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Details</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .payment-details {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #007BFF;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        strong {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="payment-details">
+        <h2>Team Leader Details</h2>
+        <p><strong>Team ID:</strong> ${result.teamId}</p>
+        <p><strong>Email:</strong> ${result.email}</p>
+        <p><strong>Mobile:</strong> ${result.phone}</p>
+    </div>
+</body>
+</html>`;
 };

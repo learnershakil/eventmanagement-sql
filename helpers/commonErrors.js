@@ -41,6 +41,13 @@ export const BAD_REQUEST = (error) => {
 };
 
 export const OK = (message, data) => {
+  if (!data) {
+    return {
+      status: true,
+      statuscode: STATUSCODE.OK,
+      message: message,
+    };
+  }
   return {
     status: true,
     statuscode: STATUSCODE.OK,

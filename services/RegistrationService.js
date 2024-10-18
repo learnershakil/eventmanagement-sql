@@ -11,8 +11,12 @@ import {
 import CommonQueries from "../commonQueries/findQueries.js";
 import { createMailOptions, sendMail } from "./MailService.js";
 import EventServices from "./EventService.js";
-import { newRegistrationButtonClick } from "../templates/registrationHtmltemplates.js";
+import {
+  newRegistrationButtonClick,
+  paymentHtml,
+} from "../templates/registrationHtmltemplates.js";
 import { BaseUrl, CRYPTO_SECRET } from "../ENV.js";
+import CryptoJS from "crypto-js";
 import crypto from "crypto";
 
 const newRegistration = async (data) => {
@@ -370,26 +374,39 @@ const callbackRegistration = async (data) => {
     // Check if registration exists
     const result = await request
       .input("registrationId", sql.Int, registrationId)
-      .query("SELECT 1 FROM Registrations WHERE id = @registrationId");
+      .query("SELECT * FROM Registrations WHERE id = @registrationId");
 
     if (result.rowsAffected[0] === 0) {
-      return res.status(NOT_FOUND).json({ message: "Registration not found" });
+      return NOT_FOUND("Registration not found");
     }
+    const registrationData = result.recordset[0];
 
+    if (registrationData.paymentStatus == "Completed") {
+      return OK("Payment status updated!", "");
+    }
     const teamId = await generateTeamId();
 
     // Update the registration
     await request
-      .input("teamId", sql.Int, teamId) // Assuming teamId is an integer
+      .input("teamId", sql.Int, Number(teamId)) // Assuming teamId is an integer
       .input("paymentStatus", sql.VarChar(255), paymentStatus) // Adjust data type as needed
-      .input("paymentId", sql.Int, paymentId) // Adjust data type as needed
+      .input("paymentId", sql.VarChar, paymentId) // Adjust data type as needed
       .query(`
-        UPDATE Registrations 
-        SET teamId = @teamId, 
-            paymentStatus = @paymentStatus, 
-            paymentId = @paymentId 
+        UPDATE Registrations
+        SET teamId = @teamId,
+            paymentStatus = @paymentStatus,
+            paymentId = @paymentId
         WHERE id = @registrationId
       `);
+
+    const key = registrationData.key;
+
+    const paymentLink = BaseUrl + "/reg/" + key;
+
+    paymentMail(
+      { ...registrationData, paymentStatus, paymentId, teamId },
+      paymentLink
+    );
 
     return OK("Payment status updated!", "");
   } catch (error) {
@@ -433,7 +450,7 @@ const getRegistrationByKey = async (key) => {
     if (result.recordset.length > 0) {
       return result.recordset[0];
     } else {
-      throw new Error("No registration found for the provided key.");
+      return null
     }
   } catch (error) {
     console.error("Error retrieving registration:", error);
@@ -542,25 +559,61 @@ const generateToken = async (publicKey) => {
   return token;
 };
 
-const generateHash = async (data) => {
+const generateHash = (data) => {
   const string = data.toString();
-  const secretKey = CRYPTO_SECRET;
 
-  const hmac = crypto.createHmac("sha256", secretKey);
-  hmac.update(string);
-  const hash = hmac.digest("hex");
+  const key = Buffer.from(CRYPTO_SECRET.toString(), "base64");
 
-  return hash;
+  if (key.length !== 32) {
+    throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+  }
+
+  const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
+
+  // Encrypt the plaintext
+  let encrypted = cipher.update(string, "utf8", "base64");
+  encrypted += cipher.final("base64");
+
+  return encrypted.toString();
 };
 
+const encrypt = (plaintext) => {
+  const string = plaintext.toString();
+  // Base64 decode the key
+  const key = Buffer.from(
+    "wTbAVr6scSwcj1tAOz9yvwAluRPXVtrtpbmwPVuAYcE=",
+    "base64"
+  );
 
-// console.log(
-//   await generateToken(
-//     "f6BCgnCln54I4aYgk64NZbd2fY2LZQovTAWDvgTmRPHLwgkvvtgyRhje3Jwsu0vHRIYEnuVdnR5jEBF9NHpGJZOMqSKVUA10ua4XrQhbHcl9laKCdxPXLY714mnFU9tWZfZDGSR6Ao8HOPAqiiSwVeoFdc3fCMqISykflg5uQSxxZznpV7wMr7bV1tAEZLEX7AYpEvfcnxQcR1PNZOuEpOqVxzo1PAFeoJzyK8UA2uz3"
-//   )
-// );
+  // Ensure the key length is 32 bytes for AES-256
+  if (key.length !== 32) {
+    throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+  }
 
-// Example implementation for team ID generation (adapt as needed)
+  // Create a cipher using AES-256-ECB mode
+  const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
+
+  // Encrypt the plaintext
+  let encrypted = cipher.update(string, "utf8", "base64");
+  encrypted += cipher.final("base64");
+
+  return encrypted;
+};
+
+const decrypt = (encryptedText) => {
+  const key = Buffer.from(CRYPTO_SECRET.toString(), "base64");
+
+  if (key.length !== 32) {
+    throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+  }
+
+  const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
+  let decrypted = decipher.update(encryptedText, "base64", "utf8");
+  decrypted += decipher.final("utf8");
+
+  return decrypted;
+};
+
 async function generateTeamId() {
   const request = await getRequest();
   const result = await request.query(
@@ -568,6 +621,37 @@ async function generateTeamId() {
   );
   return result.recordset[0][""] || 1; // Handle case where table is empty
 }
+
+const paymentMail = async (data, paymentLink) => {
+  const mailTo = data.email;
+  const subject =
+    "Payment for team " + data.teamName + " is " + data.paymentStatus;
+  const text = `Dear ${data.teamName},\n\nYour payment has been successfully processed. Your payment status is currently ${data.paymentStatus} with ${data.paymentId}.`;
+
+  const html = paymentHtml(
+    {
+      teamName: data.teamName,
+      amount: data.amount,
+      paymentStatus: data.paymentStatus,
+      paymentId: data.paymentId,
+    },
+    paymentLink
+  );
+
+  const mailOptions = createMailOptions({
+    to: mailTo,
+    subject: subject,
+    text: text,
+    html: html,
+  });
+
+  // Send email
+  const emailSent = await sendMail(mailOptions);
+
+  if (!emailSent) {
+    console.error("Failed to send payment email");
+  }
+};
 
 const RegistrationService = {
   generateRandomKey,
@@ -580,6 +664,7 @@ const RegistrationService = {
   callbackRegistration,
   getPublicKey,
   generateHash,
+  decrypt,
 };
 
 export default RegistrationService;
