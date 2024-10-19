@@ -15,9 +15,11 @@ import {
   newRegistrationButtonClick,
   paymentHtml,
 } from "../templates/registrationHtmltemplates.js";
-import { BaseUrl, CRYPTO_SECRET } from "../ENV.js";
+import { BaseUrl, CRYPTO_SECRET, PAYMENT_END } from "../ENV.js";
 import CryptoJS from "crypto-js";
 import crypto from "crypto";
+import axios from "axios";
+import TABLES from "../Enums/dbTables.js";
 
 const newRegistration = async (data) => {
   const { teamName, team, eventIds } = data;
@@ -366,9 +368,29 @@ const CsvRegistration = async (data) => {
 };
 
 const callbackRegistration = async (data) => {
-  const { registrationId, paymentStatus, paymentId } = data;
+  const { paymentStatus, paymentId } = data;
 
   try {
+    const payment = await CommonQueries.findOneById({
+      id: paymentId,
+      tableName: TABLES.PAYMENTS,
+    });
+
+    if (payment.status == false) {
+      return payment;
+    }
+
+    const registrationId = payment.registrationId;
+
+    const paymentRequest = await getRequest();
+    await paymentRequest
+      .input("paymentStatus", sql.VarChar(255), paymentStatus)
+      .input("paymentId", sql.VarChar, paymentId).query(`
+        UPDATE ${TABLES.PAYMENTS}
+        SET paymentStatus = @paymentStatus,
+        WHERE id = @paymentId
+      `);
+
     const request = await getRequest();
 
     // Check if registration exists
@@ -379,11 +401,13 @@ const callbackRegistration = async (data) => {
     if (result.rowsAffected[0] === 0) {
       return NOT_FOUND("Registration not found");
     }
+
     const registrationData = result.recordset[0];
 
     if (registrationData.paymentStatus == "Completed") {
       return OK("Payment status updated!", "");
     }
+
     const teamId = await generateTeamId();
 
     // Update the registration
@@ -450,7 +474,7 @@ const getRegistrationByKey = async (key) => {
     if (result.recordset.length > 0) {
       return result.recordset[0];
     } else {
-      return null
+      return null;
     }
   } catch (error) {
     console.error("Error retrieving registration:", error);
@@ -540,7 +564,22 @@ const generateRandomKey = () => {
 const getPublicKey = async (randomKey) => {
   if (!randomKey || !randomKey.trim()) return null;
 
-  return randomKey;
+  try {
+    const response = await axios.post(
+      PAYMENT_END + "/api/auth/Agreeonkeys",
+      JSON.stringify(randomKey),
+      {
+        headers: {
+          "Content-Type": "application/json", // Set the content type to JSON
+        },
+      }
+    );
+
+    return response.data; // Return the response data
+  } catch (error) {
+    console.log(error.message);
+    return null; // Return null or handle the error as needed
+  }
 };
 
 const generateToken = async (publicKey) => {
@@ -556,7 +595,45 @@ const generateToken = async (publicKey) => {
   const token = jwt.sign(payload, publicKey);
 
   // console.log("Generated JWT:", token);
-  return token;
+  try {
+    const response = await axios.post(
+      PAYMENT_END + "/api/auth/validate",
+      {},
+      {
+        headers: {
+          Authorization: "Bearer " + String(token),
+
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return token; // Return the response data
+  } catch (error) {
+    console.log(error.message);
+    return null; // Return null or handle the error as needed
+  }
+};
+
+const getPaymentUrl = async (paymentPayload, token) => {
+  // Define the payload
+  try {
+    const response = await axios.post(
+      PAYMENT_END + "/api/auth/new",
+      paymentPayload,
+      {
+        headers: {
+          Authorization: String(token),
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.log(error.message);
+    return null; // Return null or handle the error as needed
+  }
 };
 
 const generateHash = (data) => {
@@ -577,41 +654,52 @@ const generateHash = (data) => {
   return encrypted.toString();
 };
 
-const encrypt = (plaintext) => {
-  const string = plaintext.toString();
-  // Base64 decode the key
-  const key = Buffer.from(
-    "wTbAVr6scSwcj1tAOz9yvwAluRPXVtrtpbmwPVuAYcE=",
-    "base64"
-  );
+// const encrypt = (plaintext) => {
+//   const string = plaintext.toString();
+//   // Base64 decode the key
+//   const key = Buffer.from(
+//     "wTbAVr6scSwcj1tAOz9yvwAluRPXVtrtpbmwPVuAYcE=",
+//     "base64"
+//   );
 
-  // Ensure the key length is 32 bytes for AES-256
-  if (key.length !== 32) {
-    throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
-  }
+//   // Ensure the key length is 32 bytes for AES-256
+//   if (key.length !== 32) {
+//     throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+//   }
 
-  // Create a cipher using AES-256-ECB mode
-  const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
+//   // Create a cipher using AES-256-ECB mode
+//   const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
 
-  // Encrypt the plaintext
-  let encrypted = cipher.update(string, "utf8", "base64");
-  encrypted += cipher.final("base64");
+//   // Encrypt the plaintext
+//   let encrypted = cipher.update(string, "utf8", "base64");
+//   encrypted += cipher.final("base64");
 
-  return encrypted;
-};
+//   return encrypted;
+// };
+
 
 const decrypt = (encryptedText) => {
-  const key = Buffer.from(CRYPTO_SECRET.toString(), "base64");
+  try {
+    const key = Buffer.from(CRYPTO_SECRET.toString(), "base64");
 
-  if (key.length !== 32) {
-    throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+    if (key.length !== 32) {
+      throw new Error("Invalid key length: Key must be 32 bytes for AES-256.");
+    }
+
+    // Decode the encrypted text from Base64
+    const encryptedBuffer = Buffer.from(encryptedText, "base64");
+
+    const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
+    decipher.setAutoPadding(true);
+
+    let decrypted = decipher.update(encryptedBuffer, null, "utf8"); // input as Buffer
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
+  } catch (error) {
+    console.error("Decryption error:", error.message);
+    return null;
   }
-
-  const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
-  let decrypted = decipher.update(encryptedText, "base64", "utf8");
-  decrypted += decipher.final("utf8");
-
-  return decrypted;
 };
 
 async function generateTeamId() {
@@ -665,6 +753,7 @@ const RegistrationService = {
   getPublicKey,
   generateHash,
   decrypt,
+  getPaymentUrl,
 };
 
 export default RegistrationService;

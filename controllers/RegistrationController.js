@@ -1,7 +1,9 @@
 import { parse } from "json2csv";
 import RegistrationService from "../services/RegistrationService.js";
 import CryptoJS from "crypto-js";
-import { BaseUrl, JWT_SECRET } from "../ENV.js";
+import { BaseUrl, FRONTEND_URL, JWT_SECRET, PAYMENT_END } from "../ENV.js";
+import axios from "axios";
+import PaymentServices from "../services/PaymentService.js";
 
 export const newRegistration = async (req, res, next) => {
   const data = req.body;
@@ -66,16 +68,17 @@ export const callbackRegistration = async (req, res, next) => {
 
   // status = SUCCESS, FAILURE, RECORD_NOT_FOUND
   try {
-    const registrationId = RegistrationService.decrypt(data.ID);
+    const paymentId = RegistrationService.decrypt(data.id);
     const paymentStatus =
       RegistrationService.decrypt(data.status) === "SUCCESS"
         ? "Completed"
         : "Failed";
-    const paymentId = RegistrationService.decrypt(data.transactionNo);
+
+    if (!paymentId) return res.status(500).send(InternalServerHtml());
+    if (!paymentStatus) return res.status(500).send(InternalServerHtml());
 
     // registrationId, paymentStatus, paymentId
     const result = await RegistrationService.callbackRegistration({
-      registrationId,
       paymentStatus,
       paymentId,
     });
@@ -106,6 +109,13 @@ export const payRegister = async (req, res, next) => {
       return res.status(200).send(paymentDetailsHtml);
     }
 
+    const paymentResult = await PaymentServices.createPayment(
+      result.id,
+      result.amount
+    );
+
+    if (!paymentResult) return res.status(500).send(InternalServerHtml());
+
     // generateHash({
     //   orderId: "1",
     //   name: "Mokshit",
@@ -117,22 +127,32 @@ export const payRegister = async (req, res, next) => {
 
     const randomKey = RegistrationService.generateRandomKey();
     const publicKey = await RegistrationService.getPublicKey(randomKey);
+    if (!publicKey) return res.status(500).send(InternalServerHtml());
+
     const token = await RegistrationService.generateToken(publicKey);
+    if (!token) return res.status(500).send(InternalServerHtml());
 
     const paymentPayload = {
-      order: RegistrationService.generateHash(result.id),
-      // order: result.id.toString(),
+      order: RegistrationService.generateHash(paymentResult),
       name: result.teamName,
       amount: RegistrationService.generateHash(result.amount),
-      // amount: result.amount.toString(),
-      type: "TechSprint 2024",
+      type: "TechSprint2024",
       email: result.email,
       mobile: result.phone,
-      responseURL: BaseUrl + "/callback",
+      responseURL: BaseUrl + "/api/registration/callback",
     };
 
-    // Send token with encrypted amount
-    res.status(200).json({ publicKey, token, paymentPayload });
+    const paymentUrl = await RegistrationService.getPaymentUrl(
+      paymentPayload,
+      token
+    );
+    if (!paymentUrl) return res.status(500).send(InternalServerHtml());
+
+    res.redirect(paymentUrl);
+
+    // return res
+    //   .status(200)
+    //   .json({ publicKey, token, paymentPayload, paymentUrl });
   } catch (error) {
     next(error);
   }
@@ -148,21 +168,21 @@ const paymentCompletedHtml = (result) => {
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
+            background-color: #000; /* Set background to black */
+            color: #fff; /* Set text color to white for contrast */
             margin: 0;
             padding: 20px;
         }
         .payment-details {
             max-width: 600px;
             margin: 0 auto;
-            background-color: #fff;
+            background-color: #333; /* Dark gray background for the container */
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); /* Light shadow for contrast */
         }
         h2 {
-            color: #007BFF;
+            color: #007BFF; /* Blue color for the heading */
             margin-bottom: 20px;
         }
         p {
@@ -170,7 +190,7 @@ const paymentCompletedHtml = (result) => {
             margin: 10px 0;
         }
         strong {
-            color: #555;
+            color: #ccc; /* Light gray for strong text */
         }
     </style>
 </head>
@@ -183,4 +203,61 @@ const paymentCompletedHtml = (result) => {
     </div>
 </body>
 </html>`;
+};
+
+const InternalServerHtml = () => {
+  return `
+  <html>
+    <head>
+      <title>Internal Server Error</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          background-color: #000; /* Set background to black */
+          color: #fff; /* Set text color to white for contrast */
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+        }
+        .container {
+          text-align: center;
+          background-color: #333; /* Dark gray background for the container */
+          padding: 40px;
+          border-radius: 8px;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); /* Light shadow for contrast */
+        }
+        h1 {
+          font-size: 48px;
+          color: #e74c3c; /* Red color for the error message */
+        }
+        p {
+          font-size: 18px;
+          margin-top: 20px;
+        }
+        a {
+          display: inline-block;
+          margin-top: 30px;
+          padding: 10px 20px;
+          background-color: #3498db; /* Blue background for the button */
+          color: #fff; /* White text color for the button */
+          text-decoration: none;
+          border-radius: 5px;
+          transition: background-color 0.3s;
+        }
+        a:hover {
+          background-color: #2980b9; /* Darker blue on hover */
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>500 Internal Server Error</h1>
+        <p>Oops! Something went wrong on our end. Please try again later.</p>
+        <a href="${FRONTEND_URL}">Go Back to Home</a>
+      </div>
+    </body>
+  </html>
+  `;
 };

@@ -4,7 +4,7 @@ import STATUSCODE from "./HttpStatusCodes.js";
 export const validateFields = (fields) => {
   for (const field of fields) {
     if (
-      !field.field ||
+      (!field.field && field.field !== 0) ||
       !field.field.toString() ||
       field.field.toString().trim() === ""
     ) {

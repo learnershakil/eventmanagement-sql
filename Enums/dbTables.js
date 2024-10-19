@@ -7,6 +7,7 @@ const TABLES = Object.freeze({
   CONTACTUS: "contactus",
   ABOUTUS: "aboutus",
   REGISTRATIONS: "registrations",
+  PAYMENTS: "payments",
 });
 
 export default TABLES;

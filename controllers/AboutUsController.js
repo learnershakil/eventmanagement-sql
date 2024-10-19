@@ -73,7 +73,7 @@ const deleteAboutUs = async () => {
   try {
     const result = await CommonQueries.findAll({ tableName: "aboutus" });
     if (result.status) {
-      for (const a of result) {
+      for (const a of result.data) {
         CommonQueries.findAndDeleteById({ id: a.id, tableName: "aboutus" });
       }
       redisClient.del("AboutUs:AboutUs");

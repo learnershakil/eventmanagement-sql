@@ -12,12 +12,12 @@ aboutusRouter.post("/create", userAuth, createAboutUs);
 
 //#endregion
 
-// //#region Gallery
+// #region Gallery
 
 
 galleryRouter.get("/", getAllGallery);
 galleryRouter.delete("/:id", userAuth, deleteGallery);
 
-// //#endregion
+//#endregion
 
 export { aboutusRouter,galleryRouter };
