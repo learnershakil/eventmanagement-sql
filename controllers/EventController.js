@@ -1,39 +1,53 @@
+import sql from "mssql";
 import redisClient from "../config/redis.js";
-import EventServices from "../services/EventService.js";
+import { getRequest } from "../config/sql.js";
+import CommonQueries from "../commonQueries/findQueries.js";
+import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import { sendError } from "./ErrorHandler.js";
 
+// Create a new event
 export const createEvent = async (req, res, next) => {
-  const data = req.body;
-  const uplodedBy = req.user.userId;
+  const { title, date, location } = req.body;
+
   try {
-    const result = await EventServices.createEvent({ ...data, uplodedBy });
-    redisClient.del("Event:Events");
-    return res.status(result.statuscode).json(result);
+    const request = await getRequest();
+    const result = await request
+      .input("title", sql.VarChar, title)
+      .input("date", sql.DateTime, date)
+      .input("location", sql.VarChar, location)
+      .query(`
+        INSERT INTO Events (title, date, location)
+        OUTPUT INSERTED.* 
+        VALUES (@title, @date, @location);
+      `);
+
+    redisClient.del("Events:AllEvents");
+    
+    return res.status(STATUSCODE.CREATED).send(result.recordset[0]);
   } catch (error) {
     next(error);
   }
 };
 
-export const filterEvents = async (req, res, next) => {
+// Retrieve all events
+export const getAllEvents = async (req, res, next) => {
   try {
-    redisClient.get("Event:Events", async (err, result) => {
-      if (result && result.statuscode) {
-        const redisEvents = JSON.parse(result);
-        return res.status(redisEvents.statuscode || 200).json({
-          status: redisEvents.status,
-          message: redisEvents.message,
-          events: redisEvents.data,
-        });
+    redisClient.get("Events:AllEvents", async (err, redisEvents) => {
+      if (err) {
+        return next(err);
+      }
+
+      if (redisEvents) {
+        return res.status(STATUSCODE.OK).json(JSON.parse(redisEvents));
       } else {
-        const result = await EventServices.getAllEvents();
+        const result = await CommonQueries.findAll({ tableName: "events" });
 
-        if (result.status)
-          redisClient.set("Event:Events", JSON.stringify(result));
+        if (result.data.length === 0) {
+          return sendError(STATUSCODE.NO_CONTENT, "No events found", next);
+        }
 
-        return res.status(result.statuscode).json({
-          status: result.status,
-          message: result.message,
-          events: result.data,
-        });
+        redisClient.set("Events:AllEvents", JSON.stringify(result.data));
+        return res.status(STATUSCODE.OK).json(result.data);
       }
     });
   } catch (error) {
@@ -41,76 +55,15 @@ export const filterEvents = async (req, res, next) => {
   }
 };
 
-export const updateEvent = async (req, res, next) => {
-  const { id } = req.params;
-  const data = req.body;
-  const uplodedBy = req.user.userId;
-  try {
-    const result = await EventServices.updateEvent(id, { ...data, uplodedBy });
-    redisClient.del("Event:Events");
-    return res.status(result.statuscode).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const updateAccommodationPrice = async (req, res, next) => {
-  const { price } = req.body;
-  try {
-    const result = await EventServices.updateAccommodationPrice(price);
-
-    if (result.status) redisClient.del("Event:AccommodationPrice");
-
-    return res
-      .status(result.statuscode)
-      .json({ ...result, price: Number(result.data) });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const accommodationPrice = async (req, res, next) => {
-  try {
-    redisClient.get("Event:AccommodationPrice", async (err, result) => {
-      if (result) {
-        const data = JSON.parse(result);
-        return res
-          .status(data.statuscode)
-          .json({ message: data.message, price: Number(data.data) });
-      } else {
-        const result = await EventServices.getAccommodationPrice();
-
-        if (result.status)
-          redisClient.set("Event:AccommodationPrice", JSON.stringify(result));
-
-        return res
-          .status(result.statuscode)
-          .json({ message: result.message, price: Number(result.data) });
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
+// Delete an event by ID
 export const deleteEvent = async (req, res, next) => {
-  const { eventId } = req.params;
+  const { id } = req.params;
+
   try {
-    const result = await EventServices.deleteEvent(eventId);
-    redisClient.del("Event:Events");
-    return res.status(result.statuscode).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
+    await CommonQueries.findAndDeleteById({ id, tableName: "events" });
+    redisClient.del("Events:AllEvents");
 
-export const deleteBrochure = async (req, res, next) => {
-  try {
-    const result = await EventServices.deleteBrochure();
-
-    redisClient.del("Event:Events");
-
-    return res.status(result.statuscode).json(result);
+    return res.status(STATUSCODE.NO_CONTENT).send();
   } catch (error) {
     next(error);
   }
