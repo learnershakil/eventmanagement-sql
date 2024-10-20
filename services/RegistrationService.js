@@ -356,7 +356,7 @@ const CsvRegistration = async (data) => {
         },
       ];
 
-      return { csvFields, registrations };
+      return { csvFields, registrations, status: true };
     }
     return result;
   } catch (error) {
@@ -676,7 +676,6 @@ const generateHash = (data) => {
 
 //   return encrypted;
 // };
-
 
 const decrypt = (encryptedText) => {
   try {
