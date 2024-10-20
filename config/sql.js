@@ -20,51 +20,45 @@ const config = {
   },
 };
 
+let pool;
+
 // Function to connect to the database
 const connectToDatabase = async () => {
   try {
     // Establish the connection
-    const pool = await sql.connect(config);
+    pool = await sql.connect(config);
     console.log("Connected to SQL Server successfully!");
 
     // Example query
     const result = await pool.request().query("SELECT 1 AS number");
     console.log(result.recordset);
-
-    // Close the connection
-    return pool;
   } catch (err) {
     console.error("Database connection failed:", err);
   }
 };
 
 // Call the function to connect
-const pool = await connectToDatabase();
+connectToDatabase();
 
 const getRequest = async () => {
-  try {
-    await pool.connect();
-    return pool.request();
-  } catch (err) {
-    console.error("Database connection failed:", err);
-    throw err;
+  if (!pool) {
+    await connectToDatabase(); // Ensure the pool is connected
   }
+  return pool.request();
 };
 
 const getRequestConnection = async () => {
-  try {
-    const poolConnection = await pool.connect();
-    const transactionRequest = new sql.Request(poolConnection);
-    return { request: transactionRequest, connection: poolConnection };
-  } catch (err) {
-    console.error("Error getting request object:", err);
-    throw err;
+  if (!pool) {
+    await connectToDatabase(); // Ensure the pool is connected
   }
+  return new sql.Request(pool);
 };
 
-
+// Close the pool on process exit
 process.on("exit", () => {
-  pool.close();
+  if (pool) {
+    pool.close();
+  }
 });
 
 export { getRequest, getRequestConnection, config };
