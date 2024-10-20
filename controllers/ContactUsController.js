@@ -1,80 +1,58 @@
+import sql from "mssql";
 import redisClient from "../config/redis.js";
-import ContactUsService from "../services/ContactUsServices.js";
+import CommonQueries from "../commonQueries/findQueries.js";
+import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import { sendError } from "./ErrorHandler.js";
 
+// Create a new contact message
 export const createContactUs = async (req, res, next) => {
-  try {
-    const data = req.body;
+  const { name, email, message } = req.body;
 
-    const result = await ContactUsService.createContactUs(data);
-    if (!result.status) return res.status(result.statuscode).json(result);
-    redisClient.del("ContactUs");
-    return res.status(result.statuscode).json({ ...result.data });
+  try {
+    const request = await getRequest();
+    const result = await request
+      .input("name", sql.VarChar, name)
+      .input("email", sql.VarChar, email)
+      .input("message", sql.Text, message)
+      .query(`
+        INSERT INTO ContactUs (name, email, message)
+        OUTPUT INSERTED.* 
+        VALUES (@name, @email, @message);
+      `);
+
+    return res.status(STATUSCODE.CREATED).send(result.recordset[0]);
   } catch (error) {
     next(error);
   }
 };
 
-export const getAllContactUs = async (req, res, next) => {
-  redisClient.get("ContactUs", async (err, redisContactUs) => {
-    if (err) {
-      return next(err);
-    }
-
-    if (redisContactUs) {
-      return res.status(200).json(JSON.parse(redisContactUs));
-    } else {
-      try {
-        const result = await ContactUsService.getAllContactUs();
-        if (!result.status) return res.status(result.statuscode).json(result);
-
-        const data = result.data.map((data) => ({ ...data, _id: data.id }));
-
-        redisClient.set("ContactUs", JSON.stringify(data));
-        return res.status(result.statuscode).json(data);
-      } catch (error) {
-        next(error);
-      }
-    }
-  });
-};
-
-export const updateContactUs = async (req, res, next) => {
+// Retrieve all contact messages
+export const getAllContactMessages = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const data = req.body;
+    const result = await CommonQueries.findAll({ tableName: "ContactUs" });
 
-    // Validate id
-    const numericId = Number(id);
-    if (isNaN(numericId)) {
-      return res.status(400).json(BAD_REQUEST("Invalid contact ID"));
+    if (result.data.length == 0) {
+      return sendError(STATUSCODE.NO_CONTENT, "No contact messages found", next);
     }
 
-    const result = await ContactUsService.updateContactUs({
-      id: numericId,
-      ...data,
-    });
-    if (!result.status) return res.status(result.statuscode).json(result);
-
-    redisClient.del("ContactUs");
-    return res.status(200).json({ ...result.data });
+    return res.status(STATUSCODE.OK).json(result.data);
   } catch (error) {
     next(error);
   }
 };
 
-export const deleteContactUs = async (req, res, next) => {
+// Delete a contact message by ID
+export const deleteContactMessage = async (req, res, next) => {
+  const { id } = req.params;
+
   try {
-    const { id } = req.params;
-    const numericId = Number(id);
-    if (isNaN(numericId)) {
-      return res.status(400).json(BAD_REQUEST("Invalid contact ID"));
+    const result = await CommonQueries.findAndDeleteById({ id, tableName: "ContactUs" });
+    
+    if (!result.status) {
+      return sendError(STATUSCODE.NOT_FOUND, "Contact message not found", next);
     }
 
-    const result = await ContactUsService.deleteContactUs(numericId);
-    if (!result.status) return res.status(result.statuscode).json(result);
-
-    redisClient.del("ContactUs");
-    return res.status(200).json({ ...result.data });
+    return res.status(STATUSCODE.OK).send({ message: "Contact message deleted successfully" });
   } catch (error) {
     next(error);
   }
