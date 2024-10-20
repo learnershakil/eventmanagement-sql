@@ -1,114 +1,70 @@
-import FileServices from "../services/FileService.js";
-import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from "../helpers/commonErrors.js";
-import { sendError } from "./ErrorHandler.js";
-import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import sql from "mssql";
 import redisClient from "../config/redis.js";
+import { getRequest } from "../config/sql.js";
+import CommonQueries from "../commonQueries/findQueries.js";
+import STATUSCODE from "../helpers/HttpStatusCodes.js";
+import { sendError } from "./ErrorHandler.js";
+import FileServices from "../services/FileService.js";
 
-export const uploadFile = async (req, res) => {
-  const { userId } = req.user;
-  const { type } = req.body;
-
-  if (!req.file) {
-    return BAD_REQUEST("No file uploaded.");
-  }
-
-  const fileData = {
-    type: type,
-    file: `/uploads/${req.file.filename}`,
-    till: type === "Brochure" ? 1 : 0,
-    used: type,
-    uplodedBy: userId,
-  };
+// Upload a new file
+export const uploadFile = async (req, res, next) => {
+  const { file, type } = req.body;
 
   try {
-    const result = await FileServices.uploadFileData(fileData);
-    
-    if (fileData.used === "Brochure") redisClient.del("Event:Events");
+    const request = await getRequest();
+    const result = await request
+      .input("file", sql.VarChar, file)
+      .input("type", sql.VarChar, type)
+      .query(`
+        INSERT INTO Files (file, type)
+        OUTPUT INSERTED.* 
+        VALUES (@file, @type);
+      `);
 
-    res.status(result.statuscode).json(result);
+    redisClient.del("Files:AllFiles");
+
+    return res.status(STATUSCODE.CREATED).send(result.recordset[0]);
   } catch (error) {
-    console.error("Error saving file metadata:", error);
-    INTERNAL_SERVER_ERROR("Failed to save file metadata. " + error);
+    next(error);
   }
 };
 
-export const viewFile = async (req, res, next) => {
-  const fileId = Number(req.params.id);
-  if (typeof fileId !== "number" || isNaN(fileId)) {
-    const result = BAD_REQUEST("Invalid File Id");
-    return res.status(result.statuscode).json(result);
-  }
-
+// Retrieve all files
+export const getAllFiles = async (req, res, next) => {
   try {
-    // Check if data is in cache
-    await redisClient.get("file:" + fileId, async (err, result) => {
-      if (result) {
-        // If data is in cache, send it
-        const file = JSON.parse(result);
-        if (!file || file === null || file === undefined || !file.file)
-          return sendError(STATUSCODE.NOT_FOUND, "File not found", next);
+    redisClient.get("Files:AllFiles", async (err, redisFiles) => {
+      if (err) {
+        return next(err);
+      }
 
-        // Redirect to the file path
-        if (file.file.startsWith("uploads/")) {
-          return res.redirect(
-            `/${file.file}?length=${file.length}&width=${file.width}`
-          );
-        }
-
-        return res.redirect(file.file);
+      if (redisFiles) {
+        return res.status(STATUSCODE.OK).json(JSON.parse(redisFiles));
       } else {
-        // If data is not in cache, fetch it from the database
-        const result = await FileServices.findFileById(fileId);
-        // Store data in cache for future use
-        if (!result || result === null || result === undefined || !result.file)
-          return res.status(result.statuscode).json(result);
+        const result = await CommonQueries.findAll({ tableName: "files" });
 
-        redisClient.set("file:" + fileId, JSON.stringify(result));
-
-        if (result.file.startsWith("uploads/")) {
-          return res.redirect(`/${result.file}`);
+        if (result.data.length === 0) {
+          return sendError(STATUSCODE.NO_CONTENT, "No files found", next);
         }
 
-        res.redirect(result.file);
+        redisClient.set("Files:AllFiles", JSON.stringify(result.data));
+        return res.status(STATUSCODE.OK).json(result.data);
       }
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
+// Delete a file by ID
 export const deleteFile = async (req, res, next) => {
-  const fileId = Number(req.params.id);
-  if (typeof fileId !== "number" || isNaN(fileId)) {
-    const result = BAD_REQUEST("Invalid File Id");
-    return res.status(result.statuscode).json(result);
-  }
+  const { id } = req.params;
 
   try {
-    const fileId = req.params.id;
+    await FileServices.deleteFileById(id);
+    redisClient.del("Files:AllFiles");
 
-    const result = await FileServices.deleteFileById(fileId);
-
-    return res.status(result.statuscode).json(result);
-  } catch (err) {
-    return sendError(
-      STATUSCODE.INTERNAL_SERVER_ERROR,
-      "File Not Deleted\n" + err,
-      next
-    );
-  }
-};
-
-export const deleteTempFiles = async (req, res, next) => {
-  try {
-    const result = await FileServices.deleteTempFiles();
-
-    return res.status(result.statuscode).json(result);
-  } catch (err) {
-    return sendError(
-      STATUSCODE.INTERNAL_SERVER_ERROR,
-      "Templary file deletion failed\n" + err,
-      next
-    );
+    return res.status(STATUSCODE.NO_CONTENT).send();
+  } catch (error) {
+    next(error);
   }
 };
