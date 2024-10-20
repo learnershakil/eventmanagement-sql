@@ -1,16 +1,12 @@
 import { parse } from "json2csv";
 import RegistrationService from "../services/RegistrationService.js";
-import CryptoJS from "crypto-js";
-import { BaseUrl, FRONTEND_URL, JWT_SECRET, PAYMENT_END } from "../ENV.js";
-import axios from "axios";
+import { BaseUrl, FRONTEND_URL } from "../ENV.js";
 import PaymentServices from "../services/PaymentService.js";
 
 export const newRegistration = async (req, res, next) => {
   const data = req.body;
   try {
     const result = await RegistrationService.newRegistration(data);
-    if (!result.status) res.status(result.statuscode).json(result);
-
     res.status(result.statuscode).json(result);
   } catch (error) {
     next(error);
@@ -21,7 +17,7 @@ export const filterRegistrations = async (req, res, next) => {
   const data = req.body;
   try {
     const result = await RegistrationService.filterRegistrations(data);
-    return res.status(result.statuscode).json(result);
+    res.status(result.statuscode).json(result);
   } catch (error) {
     next(error);
   }
@@ -42,8 +38,9 @@ export const downloadRegistrations = async (req, res, next) => {
   try {
     const result = await RegistrationService.CsvRegistration(data);
 
-    if (result.status === false)
+    if (!result.status) {
       return res.status(result.statuscode).json(result);
+    }
 
     const { registrations, csvFields } = result;
     const csv = parse(registrations, { fields: csvFields });
@@ -53,7 +50,7 @@ export const downloadRegistrations = async (req, res, next) => {
       "Content-Disposition",
       `attachment; filename="registrations-${Date.now()}.csv"`
     );
-    res.setHeader("Content-Length", Buffer.byteLength(csv, "utf8")); // Set Content-Length
+    res.setHeader("Content-Length", Buffer.byteLength(csv, "utf8"));
 
     res.status(200).send(csv);
   } catch (error) {
@@ -63,10 +60,6 @@ export const downloadRegistrations = async (req, res, next) => {
 
 export const callbackRegistration = async (req, res, next) => {
   const data = req.query;
-  // "?id=" + ID + "&status=" + Status + "&type=" + Type + "&transactionNo=" +
-  // TxnID + "&hashedValue=" + hashedValue + "&Course=" + KeyNote + "&KeyNote=" + KeyNote
-
-  // status = SUCCESS, FAILURE, RECORD_NOT_FOUND
   try {
     const paymentId = RegistrationService.decrypt(data.id);
     const paymentStatus =
@@ -74,19 +67,16 @@ export const callbackRegistration = async (req, res, next) => {
         ? "Completed"
         : "Failed";
 
-    if (!paymentId) return res.status(500).send(InternalServerHtml());
-    if (!paymentStatus) return res.status(500).send(InternalServerHtml());
+    if (!paymentId || !paymentStatus) {
+      return res.status(500).send(InternalServerHtml());
+    }
 
-    // registrationId, paymentStatus, paymentId
     const result = await RegistrationService.callbackRegistration({
       paymentStatus,
       paymentId,
     });
 
-    if (result.status === false)
-      return res.status(result.statuscode).send(true);
-
-    res.status(result.statuscode).send(true);
+    res.status(result.statuscode).send(result.status);
   } catch (error) {
     next(error);
   }
@@ -105,7 +95,6 @@ export const payRegister = async (req, res, next) => {
 
     if (result.paymentStatus === "Completed") {
       const paymentDetailsHtml = paymentCompletedHtml(result);
-
       return res.status(200).send(paymentDetailsHtml);
     }
 
@@ -115,15 +104,6 @@ export const payRegister = async (req, res, next) => {
     );
 
     if (!paymentResult) return res.status(500).send(InternalServerHtml());
-
-    // generateHash({
-    //   orderId: "1",
-    //   name: "Mokshit",
-    //   amount: "100.00",
-    //   type: "TechSprint",
-    //   email: "mokshitjain18@gmail.com",
-    //   mobile: "",
-    // });
 
     const randomKey = RegistrationService.generateRandomKey();
     const publicKey = await RegistrationService.getPublicKey(randomKey);
@@ -149,10 +129,6 @@ export const payRegister = async (req, res, next) => {
     if (!paymentUrl) return res.status(500).send(InternalServerHtml());
 
     res.redirect(paymentUrl);
-
-    // return res
-    //   .status(200)
-    //   .json({ publicKey, token, paymentPayload, paymentUrl });
   } catch (error) {
     next(error);
   }
@@ -168,21 +144,21 @@ const paymentCompletedHtml = (result) => {
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #000; /* Set background to black */
-            color: #fff; /* Set text color to white for contrast */
+            background-color: #000;
+            color: #fff;
             margin: 0;
             padding: 20px;
         }
         .payment-details {
             max-width: 600px;
             margin: 0 auto;
-            background-color: #333; /* Dark gray background for the container */
+            background-color: #333;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); /* Light shadow for contrast */
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
         }
         h2 {
-            color: #007BFF; /* Blue color for the heading */
+            color: #007BFF;
             margin-bottom: 20px;
         }
         p {
@@ -190,7 +166,7 @@ const paymentCompletedHtml = (result) => {
             margin: 10px 0;
         }
         strong {
-            color: #ccc; /* Light gray for strong text */
+            color: #ccc;
         }
     </style>
 </head>
@@ -213,8 +189,8 @@ const InternalServerHtml = () => {
       <style>
         body {
           font-family: Arial, sans-serif;
-          background-color: #000; /* Set background to black */
-          color: #fff; /* Set text color to white for contrast */
+          background-color: #000;
+          color: #fff;
           display: flex;
           justify-content: center;
           align-items: center;
@@ -223,14 +199,14 @@ const InternalServerHtml = () => {
         }
         .container {
           text-align: center;
-          background-color: #333; /* Dark gray background for the container */
+          background-color: #333;
           padding: 40px;
           border-radius: 8px;
-          box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); /* Light shadow for contrast */
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
         }
         h1 {
           font-size: 48px;
-          color: #e74c3c; /* Red color for the error message */
+          color: #e74c3c;
         }
         p {
           font-size: 18px;
@@ -240,14 +216,14 @@ const InternalServerHtml = () => {
           display: inline-block;
           margin-top: 30px;
           padding: 10px 20px;
-          background-color: #3498db; /* Blue background for the button */
-          color: #fff; /* White text color for the button */
+          background-color: #3498db;
+          color: #fff;
           text-decoration: none;
           border-radius: 5px;
           transition: background-color 0.3s;
         }
         a:hover {
-          background-color: #2980b9; /* Darker blue on hover */
+          background-color: #2980b9;
         }
       </style>
     </head>
