@@ -45,13 +45,13 @@ export const getAboutUs = async (req, res, next) => {
       } else {
         const result = await CommonQueries.findAll({ tableName: "aboutus" });
 
-        if (result.data.length == 0) {
-          return next("AboutUs not found");
+        if (result.data.length === 0) {
+          return sendError(STATUSCODE.NOT_FOUND, "AboutUs not found", next);
         }
 
         const title = result.data[0].title;
         const description = result.data[0].description;
-        const videos = result.data[0].videos.split(",");
+        const videos = result.data[0].videos ? result.data[0].videos.split(",") : [];
 
         const data = {
           title,
@@ -74,7 +74,7 @@ const deleteAboutUs = async () => {
     const result = await CommonQueries.findAll({ tableName: "aboutus" });
     if (result.status) {
       for (const a of result.data) {
-        CommonQueries.findAndDeleteById({ id: a.id, tableName: "aboutus" });
+        await CommonQueries.findAndDeleteById({ id: a.id, tableName: "aboutus" });
       }
       redisClient.del("AboutUs:AboutUs");
     }
