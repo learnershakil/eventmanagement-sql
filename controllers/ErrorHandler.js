@@ -1,22 +1,20 @@
-import mongoose from "mongoose";
 import STATUSCODE from "../helpers/HttpStatusCodes.js";
 
-export const validateFields = (fields, next) => {
-  fields.forEach((field) => {
-    if (!field.field) {
-      return sendError(STATUSCODE.BAD_REQUEST, field.message, next);
-    }
-  });
-};
-
+// Middleware to handle errors
 export const sendError = (statusCode, message, next) => {
-  // console.log(message);
-  const err = new Error(message);
-  err.statusCode = statusCode;
-  return next(err);
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  next(error);
 };
 
-// check MongoId
-export const isValidMongoId = (id) => {
-  return mongoose.Types.ObjectId.isValid(id);
+// Error handling middleware for Express
+export const errorHandler = (err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  
+  res.status(statusCode).json({
+    status: "error",
+    statusCode,
+    message,
+  });
 };
