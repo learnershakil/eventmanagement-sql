@@ -29,38 +29,64 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 }).single("upload");
 
 const handleUpload = async (req, res, next) => {
   upload(req, res, async (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res
-          .status(400)
-          .json({ status: false, error: "File size cannot exceed 5MB." });
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(400)
+            .json({ status: false, error: "File size cannot exceed 50MB." });
+        }
       }
-      return res.status(400).json({ status: false, error: err.message });
-    } else if (err) {
+      if (req.file && req.file.path) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({ status: false, error: err.message });
     }
 
     if (req.file) {
       try {
         const ext = path.extname(req.file.originalname).toLowerCase();
-        const originalFilePath = req.file.path;
+        const originalFilePath = req.file.path.toLowerCase();
+        const newFilePath = originalFilePath.replace(ext, ".webp");
 
         if (ext.startsWith(".jp") || ext === ".png") {
-          await sharp(req.file.path)
-            .webp({ quality: 80, reductionEffort: 6 })
-            .toFile(req.file.path.replace(ext, ".webp"));
+          let sharpInstance = sharp(req.file.path);
 
-          // Update file information (important!)
-          req.file.filename = req.file.filename.replace(ext, ".webp");
-          req.file.path = req.file.path.replace(ext, ".webp");
-          req.file.originalname = req.file.originalname.replace(ext, ".webp");
+          // Check file size and reduce if necessary
+          const stats = fs.statSync(req.file.path);
+          const fileSizeInBytes = stats.size;
+          const fileSizeInMB = fileSizeInBytes / (1024 * 1024);
 
-          // Delete the original file *after* successful conversion
+          if (fileSizeInMB > 5) {
+            sharpInstance = sharpInstance
+              .resize(800, null, {
+                fit: "inside",
+                withoutEnlargement: true,
+              })
+              .webp({ quality: 50, reductionEffort: 6 });
+          } else {
+            sharpInstance = sharpInstance.webp({
+              quality: 80,
+              reductionEffort: 6,
+            });
+          }
+
+          await sharpInstance.toFile(newFilePath);
+
+          // Update file information
+          req.file.filename = path.basename(newFilePath);
+          req.file.path = newFilePath;
+          req.file.originalname = req.file.originalname.replace(
+            path.extname(req.file.originalname),
+            "low.webp"
+          );
+
+          // Delete the original file
           fs.unlinkSync(originalFilePath);
         }
         // PDF processing can be added here if needed

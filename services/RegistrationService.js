@@ -149,17 +149,45 @@ const filterRegistrations = async (data) => {
     } = data;
 
     const request = await getRequest();
+    // let query = `
+    //   SELECT
+    //       r.id, r.teamName, r.teamId, r.amount, r.paymentId, r.paymentStatus, r.createdAt, r.updatedAt,
+    //       e.eventName, e.eventDate, re.eventId,
+    //       tm.fullName, tm.email, tm.phoneNumber, tm.gender, tm.class, tm.optAccomodation
+    //   FROM Registrations r
+    //   LEFT JOIN RegistrationEvents re ON r.id = re.registrationId
+    //   LEFT JOIN Events e ON re.eventId = e.id
+    //   LEFT JOIN TeamMembers tm ON r.id = tm.registrationId
+    //   WHERE 1=1
+    // `;
     let query = `
-      SELECT 
-          r.id, r.teamName, r.teamId, r.amount, r.paymentId, r.paymentStatus, r.createdAt, r.updatedAt,
-          e.eventName, e.eventDate, re.eventId,
-          tm.fullName, tm.email, tm.phoneNumber, tm.gender, tm.class, tm.optAccomodation
-      FROM Registrations r
-      LEFT JOIN RegistrationEvents re ON r.id = re.registrationId
-      LEFT JOIN Events e ON re.eventId = e.id
-      LEFT JOIN TeamMembers tm ON r.id = tm.registrationId
-      WHERE 1=1
-    `;
+    SELECT 
+    r.*, 
+    r.id AS _id,
+    (
+        SELECT 
+            e.*
+        FROM 
+            RegistrationEvents re
+        JOIN 
+            Events e ON re.eventId = e.id
+        WHERE 
+            re.registrationId = r.id
+        FOR JSON PATH
+    ) AS events,
+    (
+        SELECT 
+            tm.*
+        FROM 
+            TeamMembers tm
+        WHERE 
+            tm.registrationId = r.id
+        FOR JSON PATH
+    ) AS team
+FROM 
+    Registrations r
+WHERE 
+    1=1`;
     let countQuery = `SELECT COUNT(*) AS total FROM Registrations WHERE 1=1`;
 
     if (teamName) {
@@ -210,73 +238,6 @@ const filterRegistrations = async (data) => {
     const result = await request.query(query);
     let registrations = result.recordset;
 
-    // Group by registration ID
-    registrations = registrations.reduce((acc, curr) => {
-      const existingRegistration = acc.find((r) => r.id === curr.id);
-      if (existingRegistration) {
-        // Add team members and events to existing registration
-        if (
-          curr.fullName &&
-          !existingRegistration.teamMembers.find(
-            (tm) => tm.fullName === curr.fullName
-          )
-        ) {
-          existingRegistration.teamMembers.push({
-            fullName: curr.fullName,
-            email: curr.email,
-            phoneNumber: curr.phoneNumber,
-            gender: curr.gender,
-            class: curr.class,
-            optAccomodation:
-              curr.optAccomodation === undefined ? 0 : curr.optAccomodation,
-          });
-        }
-        if (
-          curr.eventName &&
-          !existingRegistration.events.find(
-            (e) => e.eventName === curr.eventName
-          )
-        ) {
-          // Avoid duplicate events
-          existingRegistration.events.push({
-            eventName: curr.eventName,
-            eventDate: curr.eventDate,
-          });
-        }
-      } else {
-        // Create new registration object
-        acc.push({
-          id: curr.id,
-          _id: curr.id,
-          teamName: curr.teamName,
-          teamId: curr.teamId,
-          amount: curr.amount,
-          paymentStatus: curr.paymentStatus,
-          createdAt: curr.createdAt,
-          updatedAt: curr.updatedAt,
-          teamMembers: curr.fullName
-            ? [
-                {
-                  fullName: curr.fullName,
-                  email: curr.email,
-                  phoneNumber: curr.phoneNumber,
-                  gender: curr.gender,
-                  class: curr.class,
-                  optAccomodation:
-                    curr.optAccomodation === undefined
-                      ? 0
-                      : curr.optAccomodation,
-                },
-              ]
-            : [],
-          events: curr.eventName
-            ? [{ eventName: curr.eventName, eventDate: curr.eventDate }]
-            : [],
-        });
-      }
-      return acc;
-    }, []);
-
     registrations = registrations.map((reg) => ({
       registrationId: reg.id,
       _id: reg.id,
@@ -285,11 +246,11 @@ const filterRegistrations = async (data) => {
       teamId: reg.teamId,
       amount: reg.amount,
       payment: {
-        paymentStatus: !reg.paymentStatus ? "Pending" : reg.paymentStatus,
+        paymentStatus: reg.paymentStatus || "Pending",
         paymentId: reg.paymentId,
       },
-      team: reg.teamMembers,
-      eventIds: reg.events,
+      team: reg.team ? JSON.parse(reg.team) : [],
+      eventIds: reg.events ? JSON.parse(reg.events) : [],
       updatedAt: reg.updatedAt,
     }));
 
@@ -317,6 +278,7 @@ const CsvRegistration = async (data) => {
       const registrations = result.registrations;
       // Prepare data for CSV conversion
       const csvFields = [
+        { label: "Team Id", value: "teamId" },
         { label: "Team Name", value: "teamName" },
         { label: "Payment Status", value: "payment.paymentStatus" },
         { label: "Amount", value: "amount" },
@@ -330,11 +292,19 @@ const CsvRegistration = async (data) => {
           label: "Member 1 Phone",
           value: (row) => row.team[0]?.phoneNumber || "",
         },
+        {
+          label: "Member  Accomodation",
+          value: (row) => row.team[0]?.optAccomodation || "",
+        },
         { label: "Member 2", value: (row) => row.team[1]?.fullname || "" },
         { label: "Member 2 Email", value: (row) => row.team[1]?.email || "" },
         {
           label: "Member 2 Phone",
           value: (row) => row.team[1]?.phoneNumber || "",
+        },
+        {
+          label: "Member 2 Accomodation",
+          value: (row) => row.team[1]?.optAccomodation || "",
         },
         { label: "Member 3", value: (row) => row.team[2]?.fullname || "" },
         { label: "Member 3 Email", value: (row) => row.team[2]?.email || "" },
@@ -342,17 +312,29 @@ const CsvRegistration = async (data) => {
           label: "Member 3 Phone",
           value: (row) => row.team[2]?.phoneNumber || "",
         },
+        {
+          label: "Member 3 Accomodation",
+          value: (row) => row.team[2]?.optAccomodation || "",
+        },
         { label: "Member 4", value: (row) => row.team[3]?.fullname || "" },
         { label: "Member 4 Email", value: (row) => row.team[3]?.email || "" },
         {
           label: "Member 4 Phone",
           value: (row) => row.team[3]?.phoneNumber || "",
         },
+        {
+          label: "Member 4 Accomodation",
+          value: (row) => row.team[3]?.optAccomodation || "",
+        },
         { label: "Member 5", value: (row) => row.team[4]?.fullname || "" },
         { label: "Member 5 Email", value: (row) => row.team[4]?.email || "" },
         {
           label: "Member 5 Phone",
           value: (row) => row.team[4]?.phoneNumber || "",
+        },
+        {
+          label: "Member 5 Accomodation",
+          value: (row) => row.team[4]?.optAccomodation || "",
         },
       ];
 

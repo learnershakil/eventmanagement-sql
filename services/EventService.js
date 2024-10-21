@@ -35,7 +35,7 @@ const createEvent = async (eventData) => {
         eventDate,
         day,
         shift,
-        category,
+        category = 'sr',
 
         participants,
         // participants_min,
